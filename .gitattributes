@@ -1,2 +1,5 @@
 /mvnw text eol=lf
 *.cmd text eol=crlf
+
+# Arquivos gerados pelo build do React
+src/main/resources/static/** linguist-generated=true

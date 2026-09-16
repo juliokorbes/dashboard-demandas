@@ -1,28 +1,26 @@
 package br.com.dashboard.importation;
 
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-
 import org.springframework.web.bind.annotation.*;
-
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.time.LocalDate;
 import java.util.List;
 
 /**
- * Endpoints usados para leitura e importação dos arquivos Excel.
+ * Endpoints usados para leitura e importação
+ * dos arquivos Excel.
  */
 @RestController
 @RequestMapping("/import")
 public class ImportController {
 
     private final ExcelFileReader excelFileReader;
-
     private final ColumnMappingService columnMappingService;
-
     private final ImportService importService;
-
     private final ImportHistoryService importHistoryService;
 
     public ImportController(
@@ -72,25 +70,31 @@ public class ImportController {
             String externalId,
 
             @RequestParam(defaultValue = "")
+            String protocolOnr,
+
+            @RequestParam(defaultValue = "")
             String type,
 
             @RequestParam(defaultValue = "")
-            String sector,
+            String stage,
 
             @RequestParam(defaultValue = "")
             String responsible,
 
             @RequestParam(defaultValue = "")
+            String status,
+
+            @RequestParam(defaultValue = "")
             String entryDate,
+
+            @RequestParam(defaultValue = "")
+            String qualificationDate,
 
             @RequestParam(defaultValue = "")
             String deadline,
 
             @RequestParam(defaultValue = "")
-            String status,
-
-            @RequestParam(defaultValue = "")
-            String description
+            String reentryDate
 
     ) throws IOException {
 
@@ -100,13 +104,15 @@ public class ImportController {
         ColumnMapping mapping =
                 createMapping(
                         externalId,
+                        protocolOnr,
                         type,
-                        sector,
+                        stage,
                         responsible,
-                        entryDate,
-                        deadline,
                         status,
-                        description
+                        entryDate,
+                        qualificationDate,
+                        deadline,
+                        reentryDate
                 );
 
         return columnMappingService.mapRows(
@@ -117,6 +123,11 @@ public class ImportController {
 
     /**
      * Importa todas as linhas válidas do Excel.
+     *
+     * referenceDate representa a data da situação.
+     *
+     * Se nenhuma data for enviada, utiliza
+     * automaticamente o dia atual.
      */
     @PostMapping("/demands")
     public ImportResult importDemands(
@@ -127,43 +138,63 @@ public class ImportController {
             String externalId,
 
             @RequestParam(defaultValue = "")
+            String protocolOnr,
+
+            @RequestParam(defaultValue = "")
             String type,
 
             @RequestParam(defaultValue = "")
-            String sector,
+            String stage,
 
             @RequestParam(defaultValue = "")
             String responsible,
 
             @RequestParam(defaultValue = "")
+            String status,
+
+            @RequestParam(defaultValue = "")
             String entryDate,
+
+            @RequestParam(defaultValue = "")
+            String qualificationDate,
 
             @RequestParam(defaultValue = "")
             String deadline,
 
             @RequestParam(defaultValue = "")
-            String status,
+            String reentryDate,
 
-            @RequestParam(defaultValue = "")
-            String description
+            @RequestParam(required = false)
+            @DateTimeFormat(
+                    iso = DateTimeFormat.ISO.DATE
+            )
+            LocalDate referenceDate
 
     ) throws IOException {
 
         ColumnMapping mapping =
                 createMapping(
                         externalId,
+                        protocolOnr,
                         type,
-                        sector,
+                        stage,
                         responsible,
-                        entryDate,
-                        deadline,
                         status,
-                        description
+                        entryDate,
+                        qualificationDate,
+                        deadline,
+                        reentryDate
                 );
+
+        LocalDate resolvedReferenceDate =
+                referenceDate != null
+                        ? referenceDate
+                        : LocalDate.now();
 
         return importService.importDemands(
                 file,
-                mapping
+                mapping,
+                resolvedReferenceDate
         );
     }
 
@@ -194,7 +225,7 @@ public class ImportController {
     }
 
     /**
-     * Apaga o histórico de importações.
+     * Apaga o histórico geral de importações.
      */
     @DeleteMapping("/history")
     @ResponseStatus(HttpStatus.NO_CONTENT)
@@ -203,29 +234,36 @@ public class ImportController {
         importHistoryService.deleteAll();
     }
 
+    /**
+     * Cria o mapeamento entre as colunas do Excel
+     * e os campos do sistema.
+     */
     private ColumnMapping createMapping(
 
             String externalId,
+            String protocolOnr,
             String type,
-            String sector,
+            String stage,
             String responsible,
-            String entryDate,
-            String deadline,
             String status,
-            String description
+            String entryDate,
+            String qualificationDate,
+            String deadline,
+            String reentryDate
 
     ) {
 
         return new ColumnMapping(
                 externalId,
+                protocolOnr,
                 type,
-                sector,
+                stage,
                 responsible,
-                entryDate,
-                deadline,
                 status,
-                description,
-                null
+                entryDate,
+                qualificationDate,
+                deadline,
+                reentryDate
         );
     }
 }

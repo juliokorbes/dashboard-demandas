@@ -353,6 +353,10 @@ h2 {
   color: #ffc95c;
 }
 
+.card.today strong {
+  color: #ff9f43;
+}
+
 .card.success strong {
   color: #43d8a0;
 }
@@ -683,6 +687,13 @@ tbody tr:hover {
 
   background:
           rgba(255, 74, 96, 0.12);
+}
+
+.situation-badge.today {
+  color: #ff9f43;
+
+  background:
+          rgba(255, 159, 67, 0.12);
 }
 
 .situation-badge.due-soon {
@@ -1170,5 +1181,9 @@ max-width: 650px
     outline: 2px solid rgba(20, 148, 255, 0.55);
     outline-offset: 2px;
   }
-
+  .chart-description {
+    margin: 4px 0 0;
+    color: #748ba8;
+    font-size: 12px;
+  }
 }

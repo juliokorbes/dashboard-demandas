@@ -21,13 +21,13 @@ import {
 
 import './App.css'
 
-const COLORS = [
-  '#1494ff',
-  '#14d9b1',
-  '#8b5cf6',
-  '#f4b942',
+const QUALIFICATION_COLORS = [
   '#ff6577',
-  '#4fd1ff',
+  '#ff9f43',
+  '#ffc95c',
+  '#43d8a0',
+  '#3ca9ff',
+  '#a7b7ca',
 ]
 
 const tooltipStyle = {
@@ -41,82 +41,50 @@ const tooltipStyle = {
 const mappingFields = [
   {
     key: 'externalId',
-    label: 'Identificador / Protocolo',
+    label: 'Código',
     aliases: [
-      'protocolo',
-      'numero protocolo',
-      'numero do protocolo',
-      'n protocolo',
+      'codigo',
+      'código',
       'id',
       'identificador',
     ],
   },
   {
-    key: 'type',
-    label: 'Tipo',
+    key: 'protocolOnr',
+    label: 'Protocolo ONR',
     aliases: [
-      'tipo',
-      'tipo ato',
-      'tipo de ato',
-      'categoria',
-      'natureza',
-      'servico',
-      'serviço',
-      'ato',
-      'especie',
-      'espécie',
+      'protocolo onr',
+      'protocolo',
+      'onr',
     ],
   },
   {
-    key: 'sector',
-    label: 'Setor',
+    key: 'type',
+    label: 'Serviço',
     aliases: [
-      'setor',
-      'departamento',
-      'area',
-      'área',
-      'unidade',
-      'equipe',
+      'servico',
+      'serviço',
+      'tipo',
+      'tipo de servico',
+      'tipo de serviço',
+    ],
+  },
+  {
+    key: 'stage',
+    label: 'Etapa',
+    aliases: [
+      'etapa',
+      'fase',
     ],
   },
   {
     key: 'responsible',
-    label: 'Responsável',
+    label: 'Responsável atual',
     aliases: [
+      'responsavel atual',
+      'responsável atual',
       'responsavel',
       'responsável',
-      'atendente',
-      'usuario',
-      'usuário',
-      'servidor',
-      'colaborador',
-      'analista',
-    ],
-  },
-  {
-    key: 'entryDate',
-    label: 'Data de entrada',
-    aliases: [
-      'data de entrada',
-      'data entrada',
-      'entrada',
-      'recebimento',
-      'data de recebimento',
-      'abertura',
-      'data de abertura',
-    ],
-  },
-  {
-    key: 'deadline',
-    label: 'Prazo',
-    aliases: [
-      'prazo',
-      'data prazo',
-      'prazo final',
-      'data limite',
-      'vencimento',
-      'data de vencimento',
-      'deadline',
     ],
   },
   {
@@ -126,24 +94,45 @@ const mappingFields = [
       'status',
       'situacao',
       'situação',
-      'estado',
-      'andamento',
     ],
   },
   {
-    key: 'description',
-    label: 'Descrição / Observação',
+    key: 'entryDate',
+    label: 'Cadastro',
     aliases: [
-      'descricao',
-      'descrição',
-      'observacao',
-      'observação',
-      'assunto',
-      'detalhes',
-      'nota',
-      'notas',
-      'informacoes',
-      'informações',
+      'cadastro',
+      'data cadastro',
+      'data de cadastro',
+    ],
+  },
+  {
+    key: 'qualificationDate',
+    label: 'Qualificação',
+    aliases: [
+      'qualificacao',
+      'qualificação',
+      'data qualificacao',
+      'data de qualificacao',
+      'data de qualificação',
+    ],
+  },
+  {
+    key: 'deadline',
+    label: 'Vencimento',
+    aliases: [
+      'vencimento',
+      'data vencimento',
+      'data de vencimento',
+      'prazo',
+    ],
+  },
+  {
+    key: 'reentryDate',
+    label: 'Reingresso',
+    aliases: [
+      'reingresso',
+      'data reingresso',
+      'data de reingresso',
     ],
   },
 ]
@@ -223,9 +212,7 @@ function getAvailableHeaders(
 
 function createAutomaticMapping(headers) {
   const result = {}
-
-  const usedHeaders =
-      new Set()
+  const usedHeaders = new Set()
 
   mappingFields.forEach((field) => {
     const matchingHeader =
@@ -289,6 +276,25 @@ function formatDateTime(value) {
       .toLocaleString('pt-BR')
 }
 
+function getTodayInputDate() {
+  const today = new Date()
+
+  const year =
+      today.getFullYear()
+
+  const month =
+      String(
+          today.getMonth() + 1
+      ).padStart(2, '0')
+
+  const day =
+      String(
+          today.getDate()
+      ).padStart(2, '0')
+
+  return `${year}-${month}-${day}`
+}
+
 function isCompleted(status) {
   return (
       normalizeText(status) ===
@@ -301,7 +307,7 @@ function calculateSituation(demand) {
     return 'completed'
   }
 
-  if (!demand.deadline) {
+  if (!demand.qualificationDate) {
     return 'no-deadline'
   }
 
@@ -314,14 +320,14 @@ function calculateSituation(demand) {
       0
   )
 
-  const deadline =
+  const qualificationDate =
       new Date(
-          `${demand.deadline}T00:00:00`
+          `${demand.qualificationDate}T00:00:00`
       )
 
   const difference =
       Math.round(
-          (deadline - today) /
+          (qualificationDate - today) /
           (
               1000 *
               60 *
@@ -334,6 +340,10 @@ function calculateSituation(demand) {
     return 'overdue'
   }
 
+  if (difference === 0) {
+    return 'today'
+  }
+
   if (difference <= 5) {
     return 'due-soon'
   }
@@ -344,14 +354,15 @@ function calculateSituation(demand) {
 function situationLabel(situation) {
   const labels = {
     overdue: 'Atrasada',
+    today: 'Qualifica hoje',
     'due-soon':
-        'Próxima do prazo',
+        'Qualificação próxima',
     'on-time':
-        'Dentro do prazo',
+        'Qualificação futura',
     completed:
         'Concluída',
     'no-deadline':
-        'Sem prazo',
+        'Sem qualificação',
   }
 
   return (
@@ -381,11 +392,6 @@ function App() {
   const [
     delayRanges,
     setDelayRanges,
-  ] = useState([])
-
-  const [
-    statusDistribution,
-    setStatusDistribution,
   ] = useState([])
 
   const [
@@ -468,6 +474,13 @@ function App() {
     setImportResult,
   ] = useState(null)
 
+  const [
+    referenceDate,
+    setReferenceDate,
+  ] = useState(
+      getTodayInputDate
+  )
+
   const loadDashboard =
       useCallback(async () => {
         try {
@@ -483,10 +496,6 @@ function App() {
 
                 fetch(
                     '/dashboard/delay-ranges'
-                ),
-
-                fetch(
-                    '/dashboard/status-distribution'
                 ),
 
                 fetch(
@@ -510,7 +519,6 @@ function App() {
             summaryResponse,
             criticalResponse,
             delayResponse,
-            statusResponse,
             sectorResponse,
             typeResponse,
             demandsResponse,
@@ -521,7 +529,6 @@ function App() {
             summaryResponse,
             criticalResponse,
             delayResponse,
-            statusResponse,
             sectorResponse,
             typeResponse,
             demandsResponse,
@@ -542,7 +549,6 @@ function App() {
             summaryData,
             criticalData,
             delayData,
-            statusData,
             sectorData,
             typeData,
             demandsData,
@@ -551,15 +557,12 @@ function App() {
                 summaryResponse.json(),
                 criticalResponse.json(),
                 delayResponse.json(),
-                statusResponse.json(),
                 sectorResponse.json(),
                 typeResponse.json(),
                 demandsResponse.json(),
               ])
 
-          setSummary(
-              summaryData
-          )
+          setSummary(summaryData)
 
           setCriticalDemands(
               criticalData
@@ -567,10 +570,6 @@ function App() {
 
           setDelayRanges(
               delayData
-          )
-
-          setStatusDistribution(
-              statusData
           )
 
           setSectorDistribution(
@@ -616,6 +615,52 @@ function App() {
   useEffect(() => {
     loadDashboard()
   }, [loadDashboard])
+
+  const qualificationDistribution =
+      useMemo(() => {
+        if (!summary) {
+          return []
+        }
+
+        return [
+          {
+            category:
+                'Qualificações vencidas',
+            count:
+                summary.overdue ?? 0,
+          },
+          {
+            category:
+                'Qualifica hoje',
+            count:
+                summary.today ?? 0,
+          },
+          {
+            category:
+                'Qualificações próximas',
+            count:
+                summary.dueSoon ?? 0,
+          },
+          {
+            category:
+                'Qualificações futuras',
+            count:
+                summary.onTime ?? 0,
+          },
+          {
+            category:
+                'Concluídas',
+            count:
+                summary.completed ?? 0,
+          },
+          {
+            category:
+                'Sem qualificação',
+            count:
+                summary.noDeadline ?? 0,
+          },
+        ]
+      }, [summary])
 
   const availableTypes =
       useMemo(() => {
@@ -716,23 +761,23 @@ function App() {
             .sort((a, b) => {
 
               if (
-                  !a.deadline &&
-                  !b.deadline
+                  !a.qualificationDate &&
+                  !b.qualificationDate
               ) {
                 return 0
               }
 
-              if (!a.deadline) {
+              if (!a.qualificationDate) {
                 return 1
               }
 
-              if (!b.deadline) {
+              if (!b.qualificationDate) {
                 return -1
               }
 
               return (
-                  a.deadline.localeCompare(
-                      b.deadline
+                  a.qualificationDate.localeCompare(
+                      b.qualificationDate
                   )
               )
             })
@@ -758,6 +803,11 @@ function App() {
     fileInputRef
         .current
         ?.click()
+  }
+
+  function exportExcel() {
+    window.location.href =
+        '/export/excel'
   }
 
   async function handleFileSelected(
@@ -837,7 +887,15 @@ function App() {
 
     if (!mapping.externalId) {
       setImportError(
-          'Selecione uma coluna para Identificador / Protocolo.'
+          'Selecione a coluna CÓDIGO.'
+      )
+
+      return
+    }
+
+    if (!referenceDate) {
+      setImportError(
+          'Selecione a data da situação.'
       )
 
       return
@@ -854,6 +912,11 @@ function App() {
       formData.append(
           'file',
           selectedFile
+      )
+
+      formData.append(
+          'referenceDate',
+          referenceDate
       )
 
       Object.entries(
@@ -907,6 +970,9 @@ function App() {
     setMapping({})
     setImportResult(null)
     setImportError('')
+    setReferenceDate(
+        getTodayInputDate()
+    )
 
     if (
         fileInputRef.current
@@ -915,10 +981,6 @@ function App() {
     }
   }
 
-  /*
-   * Limpa demandas e histórico
-   * usando uma única operação no backend.
-   */
   async function clearDashboard() {
     const confirmed =
         window.confirm(
@@ -1012,6 +1074,20 @@ function App() {
 
             <button
                 className="import-button"
+                style={{
+                  background: '#3ccb8e',
+                  borderColor: '#3ccb8e',
+                  color: '#06251a',
+                }}
+                onClick={
+                  exportExcel
+                }
+            >
+              Exportar Excel
+            </button>
+
+            <button
+                className="import-button"
                 onClick={
                   openFileSelector
                 }
@@ -1029,9 +1105,9 @@ function App() {
 
               <div className="last-import-main">
 
-            <span className="last-import-label">
-              Última importação
-            </span>
+                <span className="last-import-label">
+                  Última importação
+                </span>
 
                 <strong>
                   {formatDateTime(
@@ -1040,47 +1116,47 @@ function App() {
                 </strong>
 
                 <span className="last-import-file">
-              {lastImport.fileName}
-            </span>
+                  {lastImport.fileName}
+                </span>
 
               </div>
 
               <div className="last-import-stats">
 
-            <span>
-              Processados
-              <strong>
-                {lastImport.processed}
-              </strong>
-            </span>
+                <span>
+                  Processados
+                  <strong>
+                    {lastImport.processed}
+                  </strong>
+                </span>
 
                 <span>
-              Importados
-              <strong>
-                {lastImport.imported}
-              </strong>
-            </span>
+                  Importados
+                  <strong>
+                    {lastImport.imported}
+                  </strong>
+                </span>
 
                 <span>
-              Duplicados
-              <strong>
-                {lastImport.duplicates}
-              </strong>
-            </span>
+                  Atualizados
+                  <strong>
+                    {lastImport.updated}
+                  </strong>
+                </span>
 
                 <span>
-              Ignorados
-              <strong>
-                {lastImport.skipped}
-              </strong>
-            </span>
+                  Ignorados
+                  <strong>
+                    {lastImport.skipped}
+                  </strong>
+                </span>
 
                 <span>
-              Erros
-              <strong>
-                {lastImport.errors}
-              </strong>
-            </span>
+                  Erros
+                  <strong>
+                    {lastImport.errors}
+                  </strong>
+                </span>
 
               </div>
 
@@ -1098,35 +1174,54 @@ function App() {
           </div>
 
           <div className="card danger">
-            <span>Atrasadas</span>
+            <span>
+              Qualificações vencidas
+            </span>
             <strong>
               {summary?.overdue ?? 0}
             </strong>
           </div>
 
+          <div className="card today">
+            <span>
+              Qualifica hoje
+            </span>
+            <strong>
+              {summary?.today ?? 0}
+            </strong>
+          </div>
+
           <div className="card warning">
-            <span>Próximas do prazo</span>
+            <span>
+              Qualificações próximas
+            </span>
             <strong>
               {summary?.dueSoon ?? 0}
             </strong>
           </div>
 
           <div className="card success">
-            <span>Dentro do prazo</span>
+            <span>
+              Qualificações futuras
+            </span>
             <strong>
               {summary?.onTime ?? 0}
             </strong>
           </div>
 
           <div className="card completed">
-            <span>Concluídas</span>
+            <span>
+              Concluídas
+            </span>
             <strong>
               {summary?.completed ?? 0}
             </strong>
           </div>
 
           <div className="card">
-            <span>Sem prazo</span>
+            <span>
+              Sem qualificação
+            </span>
             <strong>
               {summary?.noDeadline ?? 0}
             </strong>
@@ -1145,7 +1240,7 @@ function App() {
               </p>
 
               <h2>
-                Situação das demandas
+                Situação da qualificação
               </h2>
 
             </div>
@@ -1161,7 +1256,7 @@ function App() {
 
                   <Pie
                       data={
-                        statusDistribution
+                        qualificationDistribution
                       }
                       dataKey="count"
                       nameKey="category"
@@ -1174,16 +1269,16 @@ function App() {
                       }
                   >
 
-                    {statusDistribution.map(
+                    {qualificationDistribution.map(
                         (entry, index) => (
                             <Cell
                                 key={
                                   entry.category
                                 }
                                 fill={
-                                  COLORS[
+                                  QUALIFICATION_COLORS[
                                   index %
-                                  COLORS.length
+                                  QUALIFICATION_COLORS.length
                                       ]
                                 }
                                 stroke="none"
@@ -1198,10 +1293,8 @@ function App() {
                           value,
                           name
                       ) => [
-                        value,
-                        formatCategory(
-                            name
-                        ),
+                        `${value} demanda${value === 1 ? '' : 's'}`,
+                        name,
                       ]}
                       contentStyle={
                         tooltipStyle
@@ -1216,7 +1309,7 @@ function App() {
 
             <div className="legend">
 
-              {statusDistribution.map(
+              {qualificationDistribution.map(
                   (item, index) => (
 
                       <div
@@ -1226,22 +1319,20 @@ function App() {
                           }
                       >
 
-                  <span
-                      className="legend-color"
-                      style={{
-                        background:
-                            COLORS[
-                            index %
-                            COLORS.length
-                                ],
-                      }}
-                  />
+                        <span
+                            className="legend-color"
+                            style={{
+                              background:
+                                  QUALIFICATION_COLORS[
+                                  index %
+                                  QUALIFICATION_COLORS.length
+                                      ],
+                            }}
+                        />
 
                         <span>
-                    {formatCategory(
-                        item.category
-                    )}
-                  </span>
+                          {item.category}
+                        </span>
 
                         <strong>
                           {item.count}
@@ -1261,11 +1352,11 @@ function App() {
             <div className="panel-title">
 
               <p className="eyebrow">
-                Prazos
+                Qualificação
               </p>
 
               <h2>
-                Faixas de atraso
+                Demandas por dias de atraso da qualificação
               </h2>
 
             </div>
@@ -1281,6 +1372,12 @@ function App() {
                     data={
                       delayRanges
                     }
+                    margin={{
+                      top: 20,
+                      right: 10,
+                      left: 0,
+                      bottom: 0,
+                    }}
                 >
 
                   <CartesianGrid
@@ -1296,9 +1393,7 @@ function App() {
                   />
 
                   <YAxis
-                      allowDecimals={
-                        false
-                      }
+                      allowDecimals={false}
                       stroke="#748ba8"
                       tickLine={false}
                       axisLine={false}
@@ -1306,12 +1401,16 @@ function App() {
 
                   <Tooltip
                       cursor={false}
-                      formatter={(
-                          value
-                      ) => [
-                        value,
-                        'Quantidade',
-                      ]}
+                      labelFormatter={
+                        (label) =>
+                            `Atraso: ${label}`
+                      }
+                      formatter={
+                        (value) => [
+                          `${value} demanda${value === 1 ? '' : 's'}`,
+                          'Demandas atrasadas',
+                        ]
+                      }
                       contentStyle={
                         tooltipStyle
                       }
@@ -1319,7 +1418,11 @@ function App() {
 
                   <Bar
                       dataKey="count"
-                      name="Quantidade"
+                      name="Demandas atrasadas"
+                      label={{
+                        position: 'top',
+                        fill: '#ffffff',
+                      }}
                       fill="#1494ff"
                       stroke="none"
                       radius={[
@@ -1356,7 +1459,7 @@ function App() {
               </p>
 
               <h2>
-                Demandas por setor
+                Demandas por grupo operacional
               </h2>
 
             </div>
@@ -1384,6 +1487,9 @@ function App() {
                       dataKey="category"
                       stroke="#748ba8"
                       tickLine={false}
+                      tickFormatter={
+                        formatCategory
+                      }
                   />
 
                   <YAxis
@@ -1397,6 +1503,9 @@ function App() {
 
                   <Tooltip
                       cursor={false}
+                      labelFormatter={
+                        formatCategory
+                      }
                       formatter={(
                           value
                       ) => [
@@ -1447,7 +1556,7 @@ function App() {
               </p>
 
               <h2>
-                Demandas por tipo
+                Demandas por serviço
               </h2>
 
             </div>
@@ -1542,15 +1651,15 @@ function App() {
               </p>
 
               <h2>
-                Demandas mais críticas
+                Demandas prioritárias
               </h2>
 
             </div>
 
             <span>
-            {criticalDemands.length}{' '}
-              atrasadas
-          </span>
+              {criticalDemands.length}{' '}
+              vencidas ou para hoje
+            </span>
 
           </div>
 
@@ -1561,11 +1670,11 @@ function App() {
               <thead>
 
               <tr>
-                <th>Protocolo</th>
-                <th>Tipo</th>
-                <th>Setor</th>
-                <th>Prazo</th>
-                <th>Atraso</th>
+                <th>Código</th>
+                <th>Serviço</th>
+                <th>Grupo operacional</th>
+                <th>Qualificação</th>
+                <th>Prioridade</th>
                 <th>Status</th>
               </tr>
 
@@ -1580,7 +1689,7 @@ function App() {
                         colSpan="6"
                         className="empty-row"
                     >
-                      Nenhuma demanda crítica.
+                      Nenhuma demanda prioritária.
                     </td>
                   </tr>
 
@@ -1608,9 +1717,9 @@ function App() {
                             </td>
 
                             <td>
-                              {
-                                demand.sector
-                              }
+                              {formatCategory(
+                                  demand.sector
+                              )}
                             </td>
 
                             <td>
@@ -1620,12 +1729,15 @@ function App() {
                             </td>
 
                             <td>
-                        <span className="delay">
-                          {
-                            demand.daysOverdue
-                          }{' '}
-                          dias
-                        </span>
+
+                              <span className="delay">
+                                {
+                                  demand.daysOverdue === 0
+                                      ? 'Hoje'
+                                      : `${demand.daysOverdue} dias`
+                                }
+                              </span>
+
                             </td>
 
                             <td>
@@ -1666,14 +1778,14 @@ function App() {
             </div>
 
             <span>
-            {
-              filteredDemands.length
-            }{' '}
+              {
+                filteredDemands.length
+              }{' '}
               de{' '}
               {
                 allDemands.length
               }
-          </span>
+            </span>
 
           </div>
 
@@ -1682,12 +1794,12 @@ function App() {
             <div className="filter-control search-control">
 
               <label>
-                Buscar protocolo
+                Buscar código
               </label>
 
               <input
                   type="text"
-                  placeholder="Ex.: PROTOCOLO-001"
+                  placeholder="Ex.: 12345"
                   value={search}
                   onChange={
                     (event) =>
@@ -1701,7 +1813,9 @@ function App() {
 
             <div className="filter-control">
 
-              <label>Tipo</label>
+              <label>
+                Serviço
+              </label>
 
               <select
                   value={
@@ -1738,7 +1852,9 @@ function App() {
 
             <div className="filter-control">
 
-              <label>Setor</label>
+              <label>
+                Grupo operacional
+              </label>
 
               <select
                   value={
@@ -1763,7 +1879,9 @@ function App() {
                             key={sector}
                             value={sector}
                         >
-                          {sector}
+                          {formatCategory(
+                              sector
+                          )}
                         </option>
 
                     )
@@ -1775,7 +1893,9 @@ function App() {
 
             <div className="filter-control">
 
-              <label>Status</label>
+              <label>
+                Status
+              </label>
 
               <select
                   value={
@@ -1815,7 +1935,7 @@ function App() {
             <div className="filter-control">
 
               <label>
-                Situação do prazo
+                Situação da qualificação
               </label>
 
               <select
@@ -1835,15 +1955,19 @@ function App() {
                 </option>
 
                 <option value="overdue">
-                  Atrasadas
+                  Qualificações vencidas
+                </option>
+
+                <option value="today">
+                  Qualifica hoje
                 </option>
 
                 <option value="due-soon">
-                  Próximas do prazo
+                  Qualificações próximas
                 </option>
 
                 <option value="on-time">
-                  Dentro do prazo
+                  Qualificações futuras
                 </option>
 
                 <option value="completed">
@@ -1851,7 +1975,7 @@ function App() {
                 </option>
 
                 <option value="no-deadline">
-                  Sem prazo
+                  Sem qualificação
                 </option>
 
               </select>
@@ -1894,10 +2018,14 @@ function App() {
               <thead>
 
               <tr>
-                <th>Protocolo</th>
-                <th>Tipo</th>
-                <th>Setor</th>
-                <th>Prazo</th>
+                <th>Código</th>
+                <th>Serviço</th>
+                <th>Etapa</th>
+                <th>Responsável atual</th>
+                <th>Cadastro</th>
+                <th>Qualificação</th>
+                <th>Vencimento</th>
+                <th>Reingresso</th>
                 <th>Situação</th>
                 <th>Status</th>
               </tr>
@@ -1910,7 +2038,7 @@ function App() {
 
                   <tr>
                     <td
-                        colSpan="6"
+                        colSpan="10"
                         className="empty-row"
                     >
                       Nenhuma demanda encontrada.
@@ -1951,9 +2079,28 @@ function App() {
 
                               <td>
                                 {
-                                    demand.sector ||
+                                    demand.stage ||
                                     '-'
                                 }
+                              </td>
+
+                              <td>
+                                {
+                                    demand.responsible ||
+                                    '-'
+                                }
+                              </td>
+
+                              <td>
+                                {formatDate(
+                                    demand.entryDate
+                                )}
+                              </td>
+
+                              <td>
+                                {formatDate(
+                                    demand.qualificationDate
+                                )}
                               </td>
 
                               <td>
@@ -1963,14 +2110,20 @@ function App() {
                               </td>
 
                               <td>
+                                {formatDate(
+                                    demand.reentryDate
+                                )}
+                              </td>
 
-                          <span
-                              className={`situation-badge ${situation}`}
-                          >
-                            {situationLabel(
-                                situation
-                            )}
-                          </span>
+                              <td>
+
+                                <span
+                                    className={`situation-badge ${situation}`}
+                                >
+                                  {situationLabel(
+                                      situation
+                                  )}
+                                </span>
 
                               </td>
 
@@ -2029,15 +2182,76 @@ function App() {
 
                 <div className="file-info">
 
-              <span>
-                Arquivo selecionado
-              </span>
+                  <span>
+                    Arquivo selecionado
+                  </span>
 
                   <strong>
                     {
                       selectedFile?.name
                     }
                   </strong>
+
+                </div>
+
+                <div
+                    className="file-info"
+                    style={{
+                      marginTop: '12px',
+                      alignItems: 'flex-start',
+                    }}
+                >
+
+                  <label
+                      style={{
+                        width: '100%',
+                      }}
+                  >
+
+                    <span
+                        style={{
+                          display: 'block',
+                          marginBottom: '8px',
+                        }}
+                    >
+                      Data da situação
+                    </span>
+
+                    <input
+                        type="date"
+                        value={
+                          referenceDate
+                        }
+                        onChange={
+                          (event) =>
+                              setReferenceDate(
+                                  event.target.value
+                              )
+                        }
+                        style={{
+                          width: '100%',
+                          maxWidth: '240px',
+                          boxSizing: 'border-box',
+                          padding: '10px 12px',
+                          borderRadius: '8px',
+                          border: '1px solid rgba(255,255,255,0.12)',
+                          background: '#071b36',
+                          color: '#ffffff',
+                          font: 'inherit',
+                        }}
+                    />
+
+                    <small
+                        style={{
+                          display: 'block',
+                          marginTop: '8px',
+                          color: '#8fa6c3',
+                        }}
+                    >
+                      Importações do mesmo dia atualizam a mesma situação sem duplicar o código.
+                    </small>
+
+                  </label>
 
                 </div>
 
@@ -2058,32 +2272,32 @@ function App() {
                       </strong>
 
                       <span>
-                  Processados:{' '}
+                        Processados:{' '}
                         {
                           importResult.processed
                         }
-                </span>
+                      </span>
 
                       <span>
-                  Importados:{' '}
+                        Importados:{' '}
                         {
                           importResult.imported
                         }
-                </span>
+                      </span>
 
                       <span>
-                  Duplicados:{' '}
+                        Atualizados:{' '}
                         {
-                          importResult.duplicates
+                          importResult.updated
                         }
-                </span>
+                      </span>
 
                       <span>
-                  Ignorados:{' '}
+                        Ignorados:{' '}
                         {
                           importResult.skipped
                         }
-                </span>
+                      </span>
 
                     </div>
 
@@ -2137,11 +2351,11 @@ function App() {
                                             }
                                         >
 
-                              <span>
-                                {
-                                  field.label
-                                }
-                              </span>
+                                          <span>
+                                            {
+                                              field.label
+                                            }
+                                          </span>
 
                                           <select
                                               value={
@@ -2258,9 +2472,11 @@ function App() {
                                                   <td
                                                       key={`${header}-${columnIndex}`}
                                                   >
-                                                    {row[
-                                                        columnIndex
-                                                        ] || '-'}
+                                                    {
+                                                        row[
+                                                            columnIndex
+                                                            ] || '-'
+                                                    }
                                                   </td>
 
                                               )
@@ -2299,9 +2515,11 @@ function App() {
                                   importing
                                 }
                             >
-                              {importing
-                                  ? 'Importando...'
-                                  : 'Confirmar importação'}
+                              {
+                                importing
+                                    ? 'Importando...'
+                                    : 'Confirmar importação'
+                              }
                             </button>
 
                           </div>

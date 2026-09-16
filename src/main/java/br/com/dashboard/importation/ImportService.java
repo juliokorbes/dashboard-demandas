@@ -2,50 +2,81 @@ package br.com.dashboard.importation;
 
 import br.com.dashboard.demand.Demand;
 import br.com.dashboard.demand.DemandService;
-
+import br.com.dashboard.history.DemandSnapshotService;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.text.Normalizer;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 /**
- * Importa as demandas encontradas em um arquivo Excel.
+ * Importa demandas de arquivos Excel.
  */
 @Service
 public class ImportService {
 
     private final ExcelFileReader excelFileReader;
-
     private final ColumnMappingService columnMappingService;
-
     private final DemandService demandService;
-
     private final ImportHistoryService importHistoryService;
+    private final DemandSnapshotService demandSnapshotService;
 
     public ImportService(
             ExcelFileReader excelFileReader,
             ColumnMappingService columnMappingService,
             DemandService demandService,
-            ImportHistoryService importHistoryService
+            ImportHistoryService importHistoryService,
+            DemandSnapshotService demandSnapshotService
     ) {
         this.excelFileReader = excelFileReader;
         this.columnMappingService = columnMappingService;
         this.demandService = demandService;
         this.importHistoryService = importHistoryService;
+        this.demandSnapshotService = demandSnapshotService;
     }
 
     /**
-     * Lê todas as linhas do Excel e salva as demandas válidas.
+     * Mantém compatibilidade com a importação atual.
+     *
+     * Enquanto o frontend ainda não envia uma data da situação,
+     * utiliza a data atual automaticamente.
      */
     public ImportResult importDemands(
             MultipartFile file,
             ColumnMapping mapping
     ) throws IOException {
+
+        return importDemands(
+                file,
+                mapping,
+                LocalDate.now()
+        );
+    }
+
+    /**
+     * Lê todas as linhas do Excel e salva ou atualiza
+     * as demandas encontradas.
+     *
+     * Também cria ou atualiza o histórico da demanda
+     * para a data da situação informada.
+     */
+    public ImportResult importDemands(
+            MultipartFile file,
+            ColumnMapping mapping,
+            LocalDate referenceDate
+    ) throws IOException {
+
+        if (referenceDate == null) {
+            throw new IllegalArgumentException(
+                    "A data da situação é obrigatória."
+            );
+        }
 
         ExcelPreview excelData =
                 excelFileReader.readAll(file);
@@ -58,14 +89,17 @@ public class ImportService {
 
         int processed = 0;
         int imported = 0;
-        int duplicates = 0;
+        int updated = 0;
         int skipped = 0;
 
-        List<String> errors = new ArrayList<>();
+        List<String> errors =
+                new ArrayList<>();
 
-        for (int index = 0;
-             index < rows.size();
-             index++) {
+        for (
+                int index = 0;
+                index < rows.size();
+                index++
+        ) {
 
             NormalizedDemandRow row =
                     rows.get(index);
@@ -87,41 +121,102 @@ public class ImportService {
                 errors.add(
                         "Linha "
                                 + (index + 2)
-                                + ": protocolo/identificador não informado."
+                                + ": código não informado."
                 );
-
-                continue;
-            }
-
-            if (
-                    demandService.existsByExternalId(
-                            row.externalId()
-                    )
-            ) {
-
-                duplicates++;
 
                 continue;
             }
 
             try {
 
+                /*
+                 * A tabela principal representa a situação
+                 * atual da dashboard.
+                 *
+                 * Se o código já existir, atualizamos o
+                 * mesmo registro.
+                 *
+                 * Se ainda não existir, criamos um novo.
+                 */
                 Demand demand =
-                        convertToDemand(row);
+                        demandService
+                                .findByExternalId(
+                                        row.externalId()
+                                )
+                                .orElseGet(
+                                        Demand::new
+                                );
 
-                demandService.save(demand);
+                boolean alreadyExists =
+                        demand.getId() != null;
 
-                imported++;
+                updateDemand(
+                        demand,
+                        row
+                );
+
+                /*
+                 * Salva a situação atual.
+                 */
+                demandService.save(
+                        demand
+                );
+
+                /*
+                 * Salva também a fotografia histórica
+                 * correspondente à data da situação.
+                 *
+                 * A combinação:
+                 *
+                 * data da situação + código
+                 *
+                 * é única.
+                 *
+                 * Portanto:
+                 *
+                 * 15/09 + 9101
+                 * cria o registro do dia 15.
+                 *
+                 * 16/09 + 9101
+                 * cria outro registro para o dia 16.
+                 *
+                 * 16/09 + 9101 novamente
+                 * atualiza o próprio registro do dia 16.
+                 */
+                demandSnapshotService
+                        .saveOrUpdate(
+                                referenceDate,
+                                demand
+                        );
+
+                if (alreadyExists) {
+                    updated++;
+                } else {
+                    imported++;
+                }
 
             } catch (Exception exception) {
 
                 skipped++;
 
+                String message =
+                        exception.getMessage();
+
+                if (
+                        message == null ||
+                                message.isBlank()
+                ) {
+                    message =
+                            exception
+                                    .getClass()
+                                    .getSimpleName();
+                }
+
                 errors.add(
                         "Linha "
                                 + (index + 2)
                                 + ": "
-                                + exception.getMessage()
+                                + message
                 );
             }
         }
@@ -130,14 +225,13 @@ public class ImportService {
                 new ImportResult(
                         processed,
                         imported,
-                        duplicates,
+                        updated,
                         skipped,
                         errors
                 );
 
         /*
-         * Registra no SQLite as informações
-         * desta importação.
+         * Salva o histórico geral da importação.
          */
         importHistoryService.register(
                 file.getOriginalFilename(),
@@ -148,59 +242,183 @@ public class ImportService {
     }
 
     /**
-     * Converte uma linha normalizada em uma demanda.
+     * Atualiza uma demanda com os dados
+     * mais recentes do Asgard.
      */
-    private Demand convertToDemand(
+    private void updateDemand(
+            Demand demand,
             NormalizedDemandRow row
     ) {
 
-        Demand demand = new Demand();
-
         demand.setExternalId(
-                clean(row.externalId())
+                clean(
+                        row.externalId()
+                )
+        );
+
+        demand.setProtocolOnr(
+                clean(
+                        row.protocolOnr()
+                )
         );
 
         demand.setType(
-                clean(row.type())
+                clean(
+                        row.type()
+                )
         );
 
-        demand.setSector(
-                clean(row.sector())
-        );
+        String stage =
+                clean(
+                        row.stage()
+                );
 
-        demand.setResponsible(
-                clean(row.responsible())
-        );
-
-        demand.setEntryDate(
-                parseDate(row.entryDate())
-        );
-
-        demand.setDeadline(
-                parseDate(row.deadline())
-        );
-
-        demand.setStatus(
-                clean(row.status())
-        );
-
-        demand.setDescription(
-                clean(row.description())
+        /*
+         * Mantém a etapa original exatamente
+         * como veio do Asgard.
+         */
+        demand.setStage(
+                stage
         );
 
         /*
-         * Não utilizamos integração ou link
-         * para sistemas externos.
+         * Cria o agrupamento usado pela dashboard.
          */
-        demand.setExternalUrl(null);
+        demand.setSector(
+                classifySector(
+                        stage
+                )
+        );
 
-        return demand;
+        demand.setResponsible(
+                clean(
+                        row.responsible()
+                )
+        );
+
+        demand.setStatus(
+                clean(
+                        row.status()
+                )
+        );
+
+        demand.setEntryDate(
+                parseDate(
+                        row.entryDate()
+                )
+        );
+
+        /*
+         * QUALIFICAÇÃO é a principal data
+         * de prioridade operacional.
+         */
+        demand.setQualificationDate(
+                parseDate(
+                        row.qualificationDate()
+                )
+        );
+
+        demand.setDeadline(
+                parseDate(
+                        row.deadline()
+                )
+        );
+
+        demand.setReentryDate(
+                parseDate(
+                        row.reentryDate()
+                )
+        );
+
+        /*
+         * Campos antigos não são utilizados
+         * na nova importação.
+         */
+        demand.setDescription(
+                null
+        );
+
+        demand.setExternalUrl(
+                null
+        );
+    }
+
+    /**
+     * Classifica a etapa original em um
+     * grupo operacional da dashboard.
+     */
+    private String classifySector(
+            String stage
+    ) {
+
+        if (
+                stage == null ||
+                        stage.isBlank()
+        ) {
+            return null;
+        }
+
+        String normalizedStage =
+                normalizeText(
+                        stage
+                );
+
+        /*
+         * Conferência Inicial e
+         * Conferência Inicial - ONR
+         * pertencem ao mesmo grupo.
+         */
+        if (
+                normalizedStage.contains(
+                        "conferencia inicial"
+                )
+        ) {
+            return "CONFERENCIA_INICIAL";
+        }
+
+        if (
+                normalizedStage.contains(
+                        "conferencia final"
+                )
+        ) {
+            return "CONFERENCIA_FINAL";
+        }
+
+        return null;
+    }
+
+    /**
+     * Remove acentos e padroniza o texto.
+     */
+    private String normalizeText(
+            String value
+    ) {
+
+        if (value == null) {
+            return "";
+        }
+
+        return Normalizer
+                .normalize(
+                        value,
+                        Normalizer.Form.NFD
+                )
+                .replaceAll(
+                        "\\p{M}",
+                        ""
+                )
+                .toLowerCase(
+                        Locale.ROOT
+                )
+                .trim();
     }
 
     /**
      * Remove espaços extras.
      */
-    private String clean(String value) {
+    private String clean(
+            String value
+    ) {
 
         if (
                 value == null ||
@@ -213,9 +431,12 @@ public class ImportService {
     }
 
     /**
-     * Converte os formatos de data mais comuns.
+     * Converte os formatos de data
+     * utilizados nos relatórios.
      */
-    private LocalDate parseDate(String value) {
+    private LocalDate parseDate(
+            String value
+    ) {
 
         if (
                 value == null ||
@@ -224,7 +445,8 @@ public class ImportService {
             return null;
         }
 
-        String date = value.trim();
+        String date =
+                value.trim();
 
         List<DateTimeFormatter> formatters =
                 List.of(
@@ -262,12 +484,15 @@ public class ImportService {
             } catch (
                     DateTimeParseException ignored
             ) {
-                // Tenta o próximo formato.
+                /*
+                 * Tenta o próximo formato.
+                 */
             }
         }
 
         throw new IllegalArgumentException(
-                "Data inválida: " + value
+                "Data inválida: "
+                        + value
         );
     }
 
@@ -278,18 +503,41 @@ public class ImportService {
             NormalizedDemandRow row
     ) {
 
-        return isBlank(row.externalId())
-                && isBlank(row.type())
-                && isBlank(row.sector())
-                && isBlank(row.responsible())
-                && isBlank(row.entryDate())
-                && isBlank(row.deadline())
-                && isBlank(row.status())
-                && isBlank(row.description())
-                && isBlank(row.externalUrl());
+        return isBlank(
+                row.externalId()
+        )
+                && isBlank(
+                row.protocolOnr()
+        )
+                && isBlank(
+                row.type()
+        )
+                && isBlank(
+                row.stage()
+        )
+                && isBlank(
+                row.responsible()
+        )
+                && isBlank(
+                row.status()
+        )
+                && isBlank(
+                row.entryDate()
+        )
+                && isBlank(
+                row.qualificationDate()
+        )
+                && isBlank(
+                row.deadline()
+        )
+                && isBlank(
+                row.reentryDate()
+        );
     }
 
-    private boolean isBlank(String value) {
+    private boolean isBlank(
+            String value
+    ) {
 
         return value == null ||
                 value.isBlank();

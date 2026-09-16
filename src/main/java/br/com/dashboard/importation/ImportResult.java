@@ -8,7 +8,7 @@ import java.util.List;
 public record ImportResult(
         int processed,
         int imported,
-        int duplicates,
+        int updated,
         int skipped,
         List<String> errors
 ) {

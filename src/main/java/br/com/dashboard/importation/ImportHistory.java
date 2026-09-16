@@ -27,8 +27,8 @@ public class ImportHistory {
     @Column(nullable = false)
     private int imported;
 
-    @Column(nullable = false)
-    private int duplicates;
+    @Column(name = "duplicates", nullable = false)
+    private int updated;
 
     @Column(nullable = false)
     private int skipped;
@@ -44,7 +44,7 @@ public class ImportHistory {
             LocalDateTime importedAt,
             int processed,
             int imported,
-            int duplicates,
+            int updated,
             int skipped,
             int errors
     ) {
@@ -52,7 +52,7 @@ public class ImportHistory {
         this.importedAt = importedAt;
         this.processed = processed;
         this.imported = imported;
-        this.duplicates = duplicates;
+        this.updated = updated;
         this.skipped = skipped;
         this.errors = errors;
     }
@@ -77,8 +77,8 @@ public class ImportHistory {
         return imported;
     }
 
-    public int getDuplicates() {
-        return duplicates;
+    public int getupdated() {
+        return updated;
     }
 
     public int getSkipped() {

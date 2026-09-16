@@ -1,17 +1,18 @@
 package br.com.dashboard.importation;
 
 /**
- * Representa uma linha já convertida para o formato interno.
+ * Representa uma linha do Excel já convertida para os campos usados pelo sistema.
  */
 public record NormalizedDemandRow(
         String externalId,
+        String protocolOnr,
         String type,
-        String sector,
+        String stage,
         String responsible,
-        String entryDate,
-        String deadline,
         String status,
-        String description,
-        String externalUrl
+        String entryDate,
+        String qualificationDate,
+        String deadline,
+        String reentryDate
 ) {
 }

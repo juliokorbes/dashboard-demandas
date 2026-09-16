@@ -6,6 +6,7 @@ package br.com.dashboard.dashboard;
 public record DashboardSummary(
         long total,
         long overdue,
+        long today,
         long dueSoon,
         long onTime,
         long completed,

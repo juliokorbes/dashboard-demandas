@@ -1,73 +1,106 @@
-package br.com.dashboard.demand;
+package br.com.dashboard.history;
 
-import jakarta.persistence.*;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.Index;
+import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 
 import java.time.LocalDate;
 
 @Entity
-@Table(name = "demands")
-public class Demand {
+@Table(
+        name = "demand_snapshots",
+        uniqueConstraints = {
+                @UniqueConstraint(
+                        name = "uk_snapshot_date_external_id",
+                        columnNames = {
+                                "reference_date",
+                                "external_id"
+                        }
+                )
+        },
+        indexes = {
+                @Index(
+                        name = "idx_snapshot_reference_date",
+                        columnList = "reference_date"
+                ),
+                @Index(
+                        name = "idx_snapshot_external_id",
+                        columnList = "external_id"
+                ),
+                @Index(
+                        name = "idx_snapshot_sector",
+                        columnList = "sector"
+                ),
+                @Index(
+                        name = "idx_snapshot_qualification_date",
+                        columnList = "qualification_date"
+                ),
+                @Index(
+                        name = "idx_snapshot_status",
+                        columnList = "status"
+                )
+        }
+)
+public class DemandSnapshot {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    // CÓDIGO do protocolo no Asgard.
-    @Column(name = "external_id")
+    @Column(
+            name = "reference_date",
+            nullable = false
+    )
+    private LocalDate referenceDate;
+
+    @Column(
+            name = "external_id",
+            nullable = false
+    )
     private String externalId;
 
-    // PROTOCOLO ONR, quando existir.
     @Column(name = "protocol_onr")
     private String protocolOnr;
 
-    // SERVIÇO.
     private String type;
 
-    // ETAPA exatamente como veio do Asgard.
-    // Ex.: "Conferência Inicial - ONR".
     private String stage;
 
-    // Agrupamento usado pela dashboard.
-    // Ex.: "CONFERENCIA_INICIAL" ou "CONFERENCIA_FINAL".
     private String sector;
 
-    // RESPONSÁVEL ATUAL.
     private String responsible;
 
-    // CADASTRO.
     @Column(name = "entry_date")
     private LocalDate entryDate;
 
-    // QUALIFICAÇÃO.
-    // Essa será a principal data para determinar prioridade.
     @Column(name = "qualification_date")
     private LocalDate qualificationDate;
 
-    // VENCIMENTO.
     private LocalDate deadline;
 
-    // REINGRESSO.
     @Column(name = "reentry_date")
     private LocalDate reentryDate;
 
-    // STATUS original do Asgard.
     private String status;
 
-    // Campos antigos mantidos por compatibilidade.
-    private String description;
-
-    @Column(name = "external_url")
-    private String externalUrl;
-
-    public Demand() {
+    public DemandSnapshot() {
     }
 
     public Long getId() {
         return id;
     }
 
-    public void setId(Long id) {
-        this.id = id;
+    public LocalDate getReferenceDate() {
+        return referenceDate;
+    }
+
+    public void setReferenceDate(LocalDate referenceDate) {
+        this.referenceDate = referenceDate;
     }
 
     public String getExternalId() {
@@ -156,21 +189,5 @@ public class Demand {
 
     public void setStatus(String status) {
         this.status = status;
-    }
-
-    public String getDescription() {
-        return description;
-    }
-
-    public void setDescription(String description) {
-        this.description = description;
-    }
-
-    public String getExternalUrl() {
-        return externalUrl;
-    }
-
-    public void setExternalUrl(String externalUrl) {
-        this.externalUrl = externalUrl;
     }
 }

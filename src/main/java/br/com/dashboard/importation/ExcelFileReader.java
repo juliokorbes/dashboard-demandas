@@ -21,79 +21,186 @@ public class ExcelFileReader {
     /**
      * Retorna os nomes das colunas.
      */
-    public List<String> readHeaders(MultipartFile file) throws IOException {
+    public List<String> readHeaders(
+            MultipartFile file
+    ) throws IOException {
+
         return readPreview(file).headers();
     }
 
     /**
      * Retorna até 5 linhas para pré-visualização.
      */
-    public ExcelPreview readPreview(MultipartFile file) throws IOException {
+    public ExcelPreview readPreview(
+            MultipartFile file
+    ) throws IOException {
+
         return read(file, 5);
     }
 
     /**
-     * Retorna todas as linhas do arquivo.
+     * Retorna todas as linhas de todas as abas.
      */
-    public ExcelPreview readAll(MultipartFile file) throws IOException {
+    public ExcelPreview readAll(
+            MultipartFile file
+    ) throws IOException {
+
         return read(file, Integer.MAX_VALUE);
     }
 
     /**
-     * Faz a leitura do Excel.
+     * Faz a leitura das abas do Excel.
      */
-    private ExcelPreview read(MultipartFile file, int maxRows) throws IOException {
+    private ExcelPreview read(
+            MultipartFile file,
+            int maxRows
+    ) throws IOException {
 
         List<String> headers = new ArrayList<>();
         List<List<String>> rows = new ArrayList<>();
-        DataFormatter formatter = new DataFormatter();
 
-        try (Workbook workbook = WorkbookFactory.create(file.getInputStream())) {
+        DataFormatter formatter =
+                new DataFormatter();
 
-            if (workbook.getNumberOfSheets() == 0) {
-                return new ExcelPreview(headers, rows);
-            }
+        try (
+                Workbook workbook =
+                        WorkbookFactory.create(
+                                file.getInputStream()
+                        )
+        ) {
 
-            Sheet sheet = workbook.getSheetAt(0);
-            Row headerRow = sheet.getRow(0);
+            for (
+                    int sheetIndex = 0;
+                    sheetIndex < workbook.getNumberOfSheets();
+                    sheetIndex++
+            ) {
 
-            if (headerRow == null || headerRow.getLastCellNum() <= 0) {
-                return new ExcelPreview(headers, rows);
-            }
+                if (rows.size() >= maxRows) {
+                    break;
+                }
 
-            int columnCount = headerRow.getLastCellNum();
+                Sheet sheet =
+                        workbook.getSheetAt(sheetIndex);
 
-            for (int i = 0; i < columnCount; i++) {
-                headers.add(formatter.formatCellValue(headerRow.getCell(i)));
-            }
+                Row headerRow =
+                        sheet.getRow(0);
 
-            int lastRow = Math.min(sheet.getLastRowNum(), maxRows);
-
-            for (int rowIndex = 1; rowIndex <= lastRow; rowIndex++) {
-
-                Row row = sheet.getRow(rowIndex);
-
-                if (row == null) {
+                if (
+                        headerRow == null ||
+                                headerRow.getLastCellNum() <= 0
+                ) {
                     continue;
                 }
 
-                List<String> values = new ArrayList<>();
+                List<String> currentHeaders =
+                        readHeaders(
+                                headerRow,
+                                formatter
+                        );
 
-                for (int columnIndex = 0; columnIndex < columnCount; columnIndex++) {
-                    values.add(
-                            formatter.formatCellValue(row.getCell(columnIndex))
+                /*
+                 * A primeira aba define os cabeçalhos.
+                 * As demais precisam possuir a mesma estrutura.
+                 */
+                if (headers.isEmpty()) {
+
+                    headers.addAll(
+                            currentHeaders
+                    );
+
+                } else if (
+                        !headers.equals(currentHeaders)
+                ) {
+
+                    throw new IllegalArgumentException(
+                            "As abas do Excel possuem colunas diferentes."
                     );
                 }
 
-                // Ignora linhas completamente vazias.
-                if (values.stream().allMatch(String::isBlank)) {
-                    continue;
-                }
+                int columnCount =
+                        headers.size();
 
-                rows.add(values);
+                for (
+                        int rowIndex = 1;
+                        rowIndex <= sheet.getLastRowNum();
+                        rowIndex++
+                ) {
+
+                    if (rows.size() >= maxRows) {
+                        break;
+                    }
+
+                    Row row =
+                            sheet.getRow(rowIndex);
+
+                    if (row == null) {
+                        continue;
+                    }
+
+                    List<String> values =
+                            new ArrayList<>();
+
+                    for (
+                            int columnIndex = 0;
+                            columnIndex < columnCount;
+                            columnIndex++
+                    ) {
+
+                        values.add(
+                                formatter.formatCellValue(
+                                        row.getCell(columnIndex)
+                                )
+                        );
+                    }
+
+                    /*
+                     * Ignora linhas completamente vazias.
+                     */
+                    if (
+                            values.stream()
+                                    .allMatch(String::isBlank)
+                    ) {
+                        continue;
+                    }
+
+                    rows.add(values);
+                }
             }
         }
 
-        return new ExcelPreview(headers, rows);
+        return new ExcelPreview(
+                headers,
+                rows
+        );
+    }
+
+    /**
+     * Lê o cabeçalho de uma aba.
+     */
+    private List<String> readHeaders(
+            Row headerRow,
+            DataFormatter formatter
+    ) {
+
+        List<String> headers =
+                new ArrayList<>();
+
+        int columnCount =
+                headerRow.getLastCellNum();
+
+        for (
+                int index = 0;
+                index < columnCount;
+                index++
+        ) {
+
+            headers.add(
+                    formatter.formatCellValue(
+                            headerRow.getCell(index)
+                    )
+            );
+        }
+
+        return headers;
     }
 }

@@ -45,3 +45,4 @@ packaging/input/
 packaging/output/
 packaging/installer/
 packaging/debug/
+/${dashboard.database.path}

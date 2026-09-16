@@ -39,7 +39,7 @@ public class ImportHistoryService {
                         LocalDateTime.now(),
                         result.processed(),
                         result.imported(),
-                        result.duplicates(),
+                        result.updated(),
                         result.skipped(),
                         result.errors().size()
                 );

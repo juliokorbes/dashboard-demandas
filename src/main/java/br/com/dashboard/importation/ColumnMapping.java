@@ -1,17 +1,18 @@
 package br.com.dashboard.importation;
 
 /**
- * Define como as colunas do arquivo serão mapeadas.
+ * Define quais colunas do Excel correspondem aos campos usados pelo sistema.
  */
 public record ColumnMapping(
         String externalId,
+        String protocolOnr,
         String type,
-        String sector,
+        String stage,
         String responsible,
-        String entryDate,
-        String deadline,
         String status,
-        String description,
-        String externalUrl
+        String entryDate,
+        String qualificationDate,
+        String deadline,
+        String reentryDate
 ) {
 }

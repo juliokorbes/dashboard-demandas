@@ -5,7 +5,7 @@ import org.springframework.stereotype.Service;
 import java.util.List;
 
 /**
- * Converte colunas do arquivo para o formato interno.
+ * Converte colunas do arquivo Excel para o formato interno do sistema.
  */
 @Service
 public class ColumnMappingService {
@@ -22,14 +22,15 @@ public class ColumnMappingService {
                 .stream()
                 .map(row -> new NormalizedDemandRow(
                         getValue(data.headers(), row, mapping.externalId()),
+                        getValue(data.headers(), row, mapping.protocolOnr()),
                         getValue(data.headers(), row, mapping.type()),
-                        getValue(data.headers(), row, mapping.sector()),
+                        getValue(data.headers(), row, mapping.stage()),
                         getValue(data.headers(), row, mapping.responsible()),
-                        getValue(data.headers(), row, mapping.entryDate()),
-                        getValue(data.headers(), row, mapping.deadline()),
                         getValue(data.headers(), row, mapping.status()),
-                        getValue(data.headers(), row, mapping.description()),
-                        getValue(data.headers(), row, mapping.externalUrl())
+                        getValue(data.headers(), row, mapping.entryDate()),
+                        getValue(data.headers(), row, mapping.qualificationDate()),
+                        getValue(data.headers(), row, mapping.deadline()),
+                        getValue(data.headers(), row, mapping.reentryDate())
                 ))
                 .toList();
     }

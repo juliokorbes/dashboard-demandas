@@ -7,7 +7,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
-import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 
 /**
@@ -124,10 +124,14 @@ public class ImportController {
     /**
      * Importa todas as linhas válidas do Excel.
      *
-     * referenceDate representa a data da situação.
+     * referenceDateTime representa a data e hora
+     * da situação do relatório.
      *
-     * Se nenhuma data for enviada, utiliza
-     * automaticamente o dia atual.
+     * Exemplo:
+     * 2026-09-16T14:00
+     *
+     * Se nenhuma data e hora forem enviadas,
+     * utiliza automaticamente o momento atual.
      */
     @PostMapping("/demands")
     public ImportResult importDemands(
@@ -166,9 +170,9 @@ public class ImportController {
 
             @RequestParam(required = false)
             @DateTimeFormat(
-                    iso = DateTimeFormat.ISO.DATE
+                    iso = DateTimeFormat.ISO.DATE_TIME
             )
-            LocalDate referenceDate
+            LocalDateTime referenceDateTime
 
     ) throws IOException {
 
@@ -186,15 +190,15 @@ public class ImportController {
                         reentryDate
                 );
 
-        LocalDate resolvedReferenceDate =
-                referenceDate != null
-                        ? referenceDate
-                        : LocalDate.now();
+        LocalDateTime resolvedReferenceDateTime =
+                referenceDateTime != null
+                        ? referenceDateTime
+                        : LocalDateTime.now();
 
         return importService.importDemands(
                 file,
                 mapping,
-                resolvedReferenceDate
+                resolvedReferenceDateTime
         );
     }
 

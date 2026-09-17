@@ -186,26 +186,12 @@ function isCompatibleHeader(field, header) {
 
 function getAvailableHeaders(
     field,
-    headers,
-    mapping
+    headers
 ) {
-  const usedHeaders =
-      Object.entries(mapping)
-          .filter(([key, value]) => {
-            return (
-                key !== field.key &&
-                value
-            )
-          })
-          .map(([, value]) => value)
-
   return headers.filter((header) => {
-    return (
-        !usedHeaders.includes(header) &&
-        isCompatibleHeader(
-            field,
-            header
-        )
+    return isCompatibleHeader(
+        field,
+        header
     )
   })
 }
@@ -249,11 +235,18 @@ function formatCategory(value) {
   return value
       .replaceAll('_', ' ')
       .toLowerCase()
-      .replace(
-          /\b\w/g,
-          (letter) =>
-              letter.toUpperCase()
-      )
+      .split(' ')
+      .map((word) => {
+        if (!word) {
+          return word
+        }
+
+        return (
+            word.charAt(0).toUpperCase() +
+            word.slice(1)
+        )
+      })
+      .join(' ')
 }
 
 function formatDate(date) {
@@ -295,6 +288,59 @@ function getTodayInputDate() {
   return `${year}-${month}-${day}`
 }
 
+function getNowInputDateTime() {
+  const now = new Date()
+
+  const year =
+      now.getFullYear()
+
+  const month =
+      String(
+          now.getMonth() + 1
+      ).padStart(2, '0')
+
+  const day =
+      String(
+          now.getDate()
+      ).padStart(2, '0')
+
+  const hours =
+      String(
+          now.getHours()
+      ).padStart(2, '0')
+
+  const minutes =
+      String(
+          now.getMinutes()
+      ).padStart(2, '0')
+
+  return `${year}-${month}-${day}T${hours}:${minutes}`
+}
+
+function getDateFromDateTime(value) {
+  if (!value) {
+    return getTodayInputDate()
+  }
+
+  return value.slice(0, 10)
+}
+
+function formatSnapshotDateTime(value) {
+  if (!value) {
+    return '-'
+  }
+
+  const [
+    date,
+    time = '',
+  ] = value.split('T')
+
+  const formattedTime =
+      time.slice(0, 5)
+
+  return `${formatDate(date)} - ${formattedTime}`
+}
+
 function isCompleted(status) {
   return (
       normalizeText(status) ===
@@ -302,7 +348,10 @@ function isCompleted(status) {
   )
 }
 
-function calculateSituation(demand) {
+function calculateSituation(
+    demand,
+    referenceDate = getTodayInputDate()
+) {
   if (isCompleted(demand.status)) {
     return 'completed'
   }
@@ -311,14 +360,10 @@ function calculateSituation(demand) {
     return 'no-deadline'
   }
 
-  const today = new Date()
-
-  today.setHours(
-      0,
-      0,
-      0,
-      0
-  )
+  const comparisonDate =
+      new Date(
+          `${referenceDate}T00:00:00`
+      )
 
   const qualificationDate =
       new Date(
@@ -327,7 +372,7 @@ function calculateSituation(demand) {
 
   const difference =
       Math.round(
-          (qualificationDate - today) /
+          (qualificationDate - comparisonDate) /
           (
               1000 *
               60 *
@@ -349,6 +394,160 @@ function calculateSituation(demand) {
   }
 
   return 'on-time'
+}
+
+function buildHistoricalDashboard(
+    demands,
+    referenceDate
+) {
+  const summary = {
+    total: demands.length,
+    overdue: 0,
+    today: 0,
+    dueSoon: 0,
+    onTime: 0,
+    completed: 0,
+    noDeadline: 0,
+  }
+
+  const delayCounts = {
+    '1 a 5 dias': 0,
+    '6 a 10 dias': 0,
+    '11 a 30 dias': 0,
+    'Mais de 30 dias': 0,
+  }
+
+  const sectorCounts = new Map()
+  const typeCounts = new Map()
+  const critical = []
+
+  const comparisonDate = new Date(
+      `${referenceDate}T00:00:00`
+  )
+
+  demands.forEach((demand) => {
+    const situation =
+        calculateSituation(
+            demand,
+            referenceDate
+        )
+
+    if (situation === 'overdue') {
+      summary.overdue += 1
+    } else if (situation === 'today') {
+      summary.today += 1
+    } else if (situation === 'due-soon') {
+      summary.dueSoon += 1
+    } else if (situation === 'on-time') {
+      summary.onTime += 1
+    } else if (situation === 'completed') {
+      summary.completed += 1
+    } else if (situation === 'no-deadline') {
+      summary.noDeadline += 1
+    }
+
+    const sector =
+        demand.sector ||
+        'NAO_INFORMADO'
+
+    sectorCounts.set(
+        sector,
+        (sectorCounts.get(sector) || 0) + 1
+    )
+
+    const type =
+        demand.type ||
+        'NÃO INFORMADO'
+
+    typeCounts.set(
+        type,
+        (typeCounts.get(type) || 0) + 1
+    )
+
+    if (
+        !isCompleted(demand.status) &&
+        demand.qualificationDate
+    ) {
+      const qualificationDate =
+          new Date(
+              `${demand.qualificationDate}T00:00:00`
+          )
+
+      const daysOverdue = Math.round(
+          (comparisonDate - qualificationDate) /
+          (1000 * 60 * 60 * 24)
+      )
+
+      if (daysOverdue >= 0) {
+        critical.push({
+          id: demand.id,
+          externalId:
+          demand.externalId,
+          type: demand.type,
+          sector: demand.sector,
+          deadline:
+          demand.qualificationDate,
+          daysOverdue,
+          status: demand.status,
+        })
+      }
+
+      if (daysOverdue > 0) {
+        if (daysOverdue <= 5) {
+          delayCounts['1 a 5 dias'] += 1
+        } else if (daysOverdue <= 10) {
+          delayCounts['6 a 10 dias'] += 1
+        } else if (daysOverdue <= 30) {
+          delayCounts['11 a 30 dias'] += 1
+        } else {
+          delayCounts['Mais de 30 dias'] += 1
+        }
+      }
+    }
+  })
+
+  critical.sort((a, b) => {
+    return (
+        a.deadline || ''
+    ).localeCompare(
+        b.deadline || ''
+    )
+  })
+
+  const delayRanges =
+      Object.entries(delayCounts)
+          .map(([range, count]) => ({
+            range,
+            count,
+          }))
+
+  const sectorDistribution =
+      [...sectorCounts.entries()]
+          .map(([category, count]) => ({
+            category,
+            count,
+          }))
+          .sort((a, b) =>
+              b.count - a.count
+          )
+
+  const typeDistribution =
+      [...typeCounts.entries()]
+          .map(([category, count]) => ({
+            category,
+            count,
+          }))
+          .sort((a, b) =>
+              b.count - a.count
+          )
+
+  return {
+    summary,
+    critical,
+    delayRanges,
+    sectorDistribution,
+    typeDistribution,
+  }
 }
 
 function situationLabel(situation) {
@@ -475,11 +674,26 @@ function App() {
   ] = useState(null)
 
   const [
-    referenceDate,
-    setReferenceDate,
+    referenceDateTime,
+    setReferenceDateTime,
   ] = useState(
-      getTodayInputDate
+      getNowInputDateTime
   )
+
+  const [
+    historyDateTimes,
+    setHistoryDateTimes,
+  ] = useState([])
+
+  const [
+    selectedViewDateTime,
+    setSelectedViewDateTime,
+  ] = useState('')
+
+  const [
+    viewLoading,
+    setViewLoading,
+  ] = useState(false)
 
   const loadDashboard =
       useCallback(async () => {
@@ -489,29 +703,26 @@ function App() {
                 fetch(
                     '/dashboard/summary'
                 ),
-
                 fetch(
                     '/dashboard/critical'
                 ),
-
                 fetch(
                     '/dashboard/delay-ranges'
                 ),
-
                 fetch(
                     '/dashboard/sector-distribution'
                 ),
-
                 fetch(
                     '/dashboard/type-distribution'
                 ),
-
                 fetch(
                     '/demands'
                 ),
-
                 fetch(
                     '/import/history/latest'
+                ),
+                fetch(
+                    '/history/dates'
                 ),
               ])
 
@@ -523,6 +734,7 @@ function App() {
             typeResponse,
             demandsResponse,
             historyResponse,
+            historyDateTimesResponse,
           ] = responses
 
           const requiredResponses = [
@@ -602,6 +814,15 @@ function App() {
             setLastImport(null)
           }
 
+          if (historyDateTimesResponse.ok) {
+            const dates =
+                await historyDateTimesResponse.json()
+
+            setHistoryDateTimes(dates)
+          } else {
+            setHistoryDateTimes([])
+          }
+
         } catch (error) {
           console.error(
               'Erro ao carregar dashboard:',
@@ -615,6 +836,91 @@ function App() {
   useEffect(() => {
     loadDashboard()
   }, [loadDashboard])
+
+  async function loadHistoricalSnapshot(
+      dateTime
+  ) {
+    setViewLoading(true)
+
+    try {
+      const response = await fetch(
+          `/history/${encodeURIComponent(dateTime)}`
+      )
+
+      if (!response.ok) {
+        throw new Error(
+            'Não foi possível carregar o histórico selecionado.'
+        )
+      }
+
+      const demands =
+          await response.json()
+
+      const historicalDashboard =
+          buildHistoricalDashboard(
+              demands,
+              getDateFromDateTime(
+                  dateTime
+              )
+          )
+
+      setAllDemands(demands)
+      setSummary(
+          historicalDashboard.summary
+      )
+      setCriticalDemands(
+          historicalDashboard.critical
+      )
+      setDelayRanges(
+          historicalDashboard.delayRanges
+      )
+      setSectorDistribution(
+          historicalDashboard.sectorDistribution
+      )
+      setTypeDistribution(
+          historicalDashboard.typeDistribution
+      )
+
+      clearFilters()
+    } catch (error) {
+      console.error(
+          'Erro ao carregar histórico:',
+          error
+      )
+
+      alert(error.message)
+    } finally {
+      setViewLoading(false)
+    }
+  }
+
+  async function handleViewDateTimeChange(
+      event
+  ) {
+    const dateTime =
+        event.target.value
+
+    setSelectedViewDateTime(
+        dateTime
+    )
+
+    if (!dateTime) {
+      setViewLoading(true)
+
+      try {
+        clearFilters()
+        await loadDashboard()
+      } finally {
+        setViewLoading(false)
+      }
+
+      return
+    }
+
+    await loadHistoricalSnapshot(
+        dateTime
+    )
+  }
 
   const qualificationDistribution =
       useMemo(() => {
@@ -750,7 +1056,12 @@ function App() {
               if (
                   situationFilter &&
                   calculateSituation(
-                      demand
+                      demand,
+                      selectedViewDateTime
+                          ? getDateFromDateTime(
+                              selectedViewDateTime
+                          )
+                          : getTodayInputDate()
                   ) !== situationFilter
               ) {
                 return false
@@ -789,6 +1100,7 @@ function App() {
         sectorFilter,
         statusFilter,
         situationFilter,
+        selectedViewDateTime,
       ])
 
   function clearFilters() {
@@ -806,6 +1118,14 @@ function App() {
   }
 
   function exportExcel() {
+    if (selectedViewDateTime) {
+      alert(
+          'A exportação do histórico será adicionada no próximo passo. Volte para Situação atual para exportar por enquanto.'
+      )
+
+      return
+    }
+
     window.location.href =
         '/export/excel'
   }
@@ -893,9 +1213,9 @@ function App() {
       return
     }
 
-    if (!referenceDate) {
+    if (!referenceDateTime) {
       setImportError(
-          'Selecione a data da situação.'
+          'Selecione a data e hora da situação.'
       )
 
       return
@@ -915,8 +1235,8 @@ function App() {
       )
 
       formData.append(
-          'referenceDate',
-          referenceDate
+          'referenceDateTime',
+          referenceDateTime
       )
 
       Object.entries(
@@ -951,6 +1271,7 @@ function App() {
           await response.json()
 
       setImportResult(result)
+      setSelectedViewDateTime('')
 
       await loadDashboard()
 
@@ -970,8 +1291,8 @@ function App() {
     setMapping({})
     setImportResult(null)
     setImportError('')
-    setReferenceDate(
-        getTodayInputDate()
+    setReferenceDateTime(
+        getNowInputDateTime()
     )
 
     if (
@@ -1007,6 +1328,7 @@ function App() {
       }
 
       clearFilters()
+      setSelectedViewDateTime('')
 
       await loadDashboard()
 
@@ -1098,6 +1420,89 @@ function App() {
           </div>
 
         </header>
+
+        <section
+            className="last-import"
+            style={{
+              marginBottom: '18px',
+            }}
+        >
+
+          <div className="last-import-main">
+
+            <span className="last-import-label">
+              Visualização
+            </span>
+
+            <strong>
+              {selectedViewDateTime
+                  ? `Histórico de ${formatSnapshotDateTime(
+                      selectedViewDateTime
+                  )}`
+                  : 'Situação atual'}
+            </strong>
+
+            <span className="last-import-file">
+              {selectedViewDateTime
+                  ? 'Fotografia salva das demandas nessa data e hora.'
+                  : 'Dados mais recentes importados.'}
+            </span>
+
+          </div>
+
+          <div
+              style={{
+                minWidth: '250px',
+                display: 'flex',
+                alignItems: 'center',
+              }}
+          >
+
+            <select
+                value={selectedViewDateTime}
+                onChange={
+                  handleViewDateTimeChange
+                }
+                disabled={viewLoading}
+                style={{
+                  width: '100%',
+                  boxSizing: 'border-box',
+                  padding: '10px 12px',
+                  borderRadius: '8px',
+                  border: '1px solid rgba(255,255,255,0.12)',
+                  background: '#071b36',
+                  color: '#ffffff',
+                  font: 'inherit',
+                  cursor: viewLoading
+                      ? 'wait'
+                      : 'pointer',
+                }}
+            >
+
+              <option value="">
+                Situação atual
+              </option>
+
+              {historyDateTimes.map(
+                  (dateTime) => (
+
+                      <option
+                          key={dateTime}
+                          value={dateTime}
+                      >
+                        {formatSnapshotDateTime(
+                            dateTime
+                        )}
+                      </option>
+
+                  )
+              )}
+
+            </select>
+
+          </div>
+
+        </section>
 
         {lastImport && (
 
@@ -2052,7 +2457,12 @@ function App() {
 
                         const situation =
                             calculateSituation(
-                                demand
+                                demand,
+                                selectedViewDateTime
+                                    ? getDateFromDateTime(
+                                        selectedViewDateTime
+                                    )
+                                    : getTodayInputDate()
                             )
 
                         return (
@@ -2214,17 +2624,18 @@ function App() {
                           marginBottom: '8px',
                         }}
                     >
-                      Data da situação
+                      Data e hora da situação
                     </span>
 
                     <input
-                        type="date"
+                        type="datetime-local"
+                        step="60"
                         value={
-                          referenceDate
+                          referenceDateTime
                         }
                         onChange={
                           (event) =>
-                              setReferenceDate(
+                              setReferenceDateTime(
                                   event.target.value
                               )
                         }
@@ -2248,7 +2659,7 @@ function App() {
                           color: '#8fa6c3',
                         }}
                     >
-                      Importações do mesmo dia atualizam a mesma situação sem duplicar o código.
+                      Importações com a mesma data e hora atualizam a mesma fotografia sem duplicar o código.
                     </small>
 
                   </label>
@@ -2325,7 +2736,7 @@ function App() {
                               </h3>
 
                               <p>
-                                Selecione a coluna do Excel correspondente a cada campo.
+                                O sistema tenta mapear automaticamente. Você também pode escolher manualmente uma coluna compatível com cada campo.
                               </p>
 
                             </div>
@@ -2338,8 +2749,7 @@ function App() {
                                     const availableHeaders =
                                         getAvailableHeaders(
                                             field,
-                                            preview.headers,
-                                            mapping
+                                            preview.headers
                                         )
 
                                     return (

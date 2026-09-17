@@ -10,23 +10,24 @@ import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 
 @Entity
 @Table(
-        name = "demand_snapshots",
+        name = "demand_snapshots_v2",
         uniqueConstraints = {
                 @UniqueConstraint(
-                        name = "uk_snapshot_date_external_id",
+                        name = "uk_snapshot_datetime_external_id",
                         columnNames = {
-                                "reference_date",
+                                "reference_datetime",
                                 "external_id"
                         }
                 )
         },
         indexes = {
                 @Index(
-                        name = "idx_snapshot_reference_date",
-                        columnList = "reference_date"
+                        name = "idx_snapshot_reference_datetime",
+                        columnList = "reference_datetime"
                 ),
                 @Index(
                         name = "idx_snapshot_external_id",
@@ -53,10 +54,10 @@ public class DemandSnapshot {
     private Long id;
 
     @Column(
-            name = "reference_date",
+            name = "reference_datetime",
             nullable = false
     )
-    private LocalDate referenceDate;
+    private LocalDateTime referenceDateTime;
 
     @Column(
             name = "external_id",
@@ -95,19 +96,23 @@ public class DemandSnapshot {
         return id;
     }
 
-    public LocalDate getReferenceDate() {
-        return referenceDate;
+    public LocalDateTime getReferenceDateTime() {
+        return referenceDateTime;
     }
 
-    public void setReferenceDate(LocalDate referenceDate) {
-        this.referenceDate = referenceDate;
+    public void setReferenceDateTime(
+            LocalDateTime referenceDateTime
+    ) {
+        this.referenceDateTime = referenceDateTime;
     }
 
     public String getExternalId() {
         return externalId;
     }
 
-    public void setExternalId(String externalId) {
+    public void setExternalId(
+            String externalId
+    ) {
         this.externalId = externalId;
     }
 
@@ -115,7 +120,9 @@ public class DemandSnapshot {
         return protocolOnr;
     }
 
-    public void setProtocolOnr(String protocolOnr) {
+    public void setProtocolOnr(
+            String protocolOnr
+    ) {
         this.protocolOnr = protocolOnr;
     }
 
@@ -123,7 +130,9 @@ public class DemandSnapshot {
         return type;
     }
 
-    public void setType(String type) {
+    public void setType(
+            String type
+    ) {
         this.type = type;
     }
 
@@ -131,7 +140,9 @@ public class DemandSnapshot {
         return stage;
     }
 
-    public void setStage(String stage) {
+    public void setStage(
+            String stage
+    ) {
         this.stage = stage;
     }
 
@@ -139,7 +150,9 @@ public class DemandSnapshot {
         return sector;
     }
 
-    public void setSector(String sector) {
+    public void setSector(
+            String sector
+    ) {
         this.sector = sector;
     }
 
@@ -147,7 +160,9 @@ public class DemandSnapshot {
         return responsible;
     }
 
-    public void setResponsible(String responsible) {
+    public void setResponsible(
+            String responsible
+    ) {
         this.responsible = responsible;
     }
 
@@ -155,7 +170,9 @@ public class DemandSnapshot {
         return entryDate;
     }
 
-    public void setEntryDate(LocalDate entryDate) {
+    public void setEntryDate(
+            LocalDate entryDate
+    ) {
         this.entryDate = entryDate;
     }
 
@@ -163,15 +180,20 @@ public class DemandSnapshot {
         return qualificationDate;
     }
 
-    public void setQualificationDate(LocalDate qualificationDate) {
-        this.qualificationDate = qualificationDate;
+    public void setQualificationDate(
+            LocalDate qualificationDate
+    ) {
+        this.qualificationDate =
+                qualificationDate;
     }
 
     public LocalDate getDeadline() {
         return deadline;
     }
 
-    public void setDeadline(LocalDate deadline) {
+    public void setDeadline(
+            LocalDate deadline
+    ) {
         this.deadline = deadline;
     }
 
@@ -179,7 +201,9 @@ public class DemandSnapshot {
         return reentryDate;
     }
 
-    public void setReentryDate(LocalDate reentryDate) {
+    public void setReentryDate(
+            LocalDate reentryDate
+    ) {
         this.reentryDate = reentryDate;
     }
 
@@ -187,7 +211,9 @@ public class DemandSnapshot {
         return status;
     }
 
-    public void setStatus(String status) {
+    public void setStatus(
+            String status
+    ) {
         this.status = status;
     }
 }

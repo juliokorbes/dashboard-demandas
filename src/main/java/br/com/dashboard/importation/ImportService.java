@@ -9,6 +9,7 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.IOException;
 import java.text.Normalizer;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
@@ -42,10 +43,10 @@ public class ImportService {
     }
 
     /**
-     * Mantém compatibilidade com a importação atual.
+     * Mantém compatibilidade com importações que
+     * não informem data e hora da situação.
      *
-     * Enquanto o frontend ainda não envia uma data da situação,
-     * utiliza a data atual automaticamente.
+     * Nesse caso, utiliza o momento atual.
      */
     public ImportResult importDemands(
             MultipartFile file,
@@ -55,7 +56,7 @@ public class ImportService {
         return importDemands(
                 file,
                 mapping,
-                LocalDate.now()
+                LocalDateTime.now()
         );
     }
 
@@ -63,18 +64,26 @@ public class ImportService {
      * Lê todas as linhas do Excel e salva ou atualiza
      * as demandas encontradas.
      *
-     * Também cria ou atualiza o histórico da demanda
-     * para a data da situação informada.
+     * Também cria ou atualiza uma fotografia histórica
+     * para a data e hora da situação informada.
+     *
+     * Exemplo:
+     *
+     * 16/09/2026 14:00 + código 9101
+     * representa uma fotografia.
+     *
+     * 16/09/2026 17:00 + código 9101
+     * representa outra fotografia independente.
      */
     public ImportResult importDemands(
             MultipartFile file,
             ColumnMapping mapping,
-            LocalDate referenceDate
+            LocalDateTime referenceDateTime
     ) throws IOException {
 
-        if (referenceDate == null) {
+        if (referenceDateTime == null) {
             throw new IllegalArgumentException(
-                    "A data da situação é obrigatória."
+                    "A data e hora da situação são obrigatórias."
             );
         }
 
@@ -130,13 +139,14 @@ public class ImportService {
             try {
 
                 /*
-                 * A tabela principal representa a situação
-                 * atual da dashboard.
+                 * A tabela principal representa
+                 * a situação atual da dashboard.
                  *
-                 * Se o código já existir, atualizamos o
-                 * mesmo registro.
+                 * Se o código já existir, o mesmo
+                 * registro é atualizado.
                  *
-                 * Se ainda não existir, criamos um novo.
+                 * Se ainda não existir, é criado
+                 * um novo registro.
                  */
                 Demand demand =
                         demandService
@@ -164,28 +174,30 @@ public class ImportService {
 
                 /*
                  * Salva também a fotografia histórica
-                 * correspondente à data da situação.
+                 * correspondente à data e hora
+                 * da situação.
                  *
                  * A combinação:
                  *
-                 * data da situação + código
+                 * data + hora da situação + código
                  *
                  * é única.
                  *
-                 * Portanto:
+                 * Exemplos:
                  *
-                 * 15/09 + 9101
-                 * cria o registro do dia 15.
+                 * 16/09/2026 14:00 + 9101
+                 * cria uma fotografia.
                  *
-                 * 16/09 + 9101
-                 * cria outro registro para o dia 16.
+                 * 16/09/2026 17:00 + 9101
+                 * cria outra fotografia.
                  *
-                 * 16/09 + 9101 novamente
-                 * atualiza o próprio registro do dia 16.
+                 * 16/09/2026 17:00 + 9101
+                 * novamente atualiza apenas a
+                 * fotografia das 17:00.
                  */
                 demandSnapshotService
                         .saveOrUpdate(
-                                referenceDate,
+                                referenceDateTime,
                                 demand
                         );
 

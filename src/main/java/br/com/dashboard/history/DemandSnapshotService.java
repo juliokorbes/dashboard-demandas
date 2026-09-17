@@ -1,10 +1,10 @@
 package br.com.dashboard.history;
 
 import br.com.dashboard.demand.Demand;
+import jakarta.transaction.Transactional;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Service
@@ -20,177 +20,19 @@ public class DemandSnapshotService {
 
     @Transactional
     public DemandSnapshot saveOrUpdate(
-            LocalDate referenceDate,
+            LocalDateTime referenceDateTime,
             Demand demand
     ) {
-
-        if (referenceDate == null) {
-            throw new IllegalArgumentException(
-                    "A data da situação é obrigatória."
-            );
-        }
-
-        if (
-                demand == null ||
-                        demand.getExternalId() == null ||
-                        demand.getExternalId().isBlank()
-        ) {
-            throw new IllegalArgumentException(
-                    "A demanda precisa possuir um código."
-            );
-        }
-
         DemandSnapshot snapshot =
                 repository
-                        .findByReferenceDateAndExternalIdIgnoreCase(
-                                referenceDate,
+                        .findByReferenceDateTimeAndExternalIdIgnoreCase(
+                                referenceDateTime,
                                 demand.getExternalId()
                         )
-                        .orElseGet(
-                                DemandSnapshot::new
-                        );
+                        .orElseGet(DemandSnapshot::new);
 
-        copyDemandToSnapshot(
-                demand,
-                snapshot,
-                referenceDate
-        );
-
-        return repository.save(
-                snapshot
-        );
-    }
-
-    @Transactional
-    public void saveOrUpdateAll(
-            LocalDate referenceDate,
-            List<Demand> demands
-    ) {
-
-        if (demands == null) {
-            return;
-        }
-
-        for (Demand demand : demands) {
-
-            saveOrUpdate(
-                    referenceDate,
-                    demand
-            );
-        }
-    }
-
-    @Transactional
-    public void replaceSnapshot(
-            LocalDate referenceDate,
-            List<Demand> demands
-    ) {
-
-        if (referenceDate == null) {
-            throw new IllegalArgumentException(
-                    "A data da situação é obrigatória."
-            );
-        }
-
-        repository.deleteAllByReferenceDate(
-                referenceDate
-        );
-
-        if (demands == null) {
-            return;
-        }
-
-        for (Demand demand : demands) {
-
-            if (
-                    demand == null ||
-                            demand.getExternalId() == null ||
-                            demand.getExternalId().isBlank()
-            ) {
-                continue;
-            }
-
-            DemandSnapshot snapshot =
-                    new DemandSnapshot();
-
-            copyDemandToSnapshot(
-                    demand,
-                    snapshot,
-                    referenceDate
-            );
-
-            repository.save(
-                    snapshot
-            );
-        }
-    }
-
-    public List<DemandSnapshot>
-    findByReferenceDate(
-            LocalDate referenceDate
-    ) {
-
-        return repository
-                .findAllByReferenceDateOrderByQualificationDateAsc(
-                        referenceDate
-                );
-    }
-
-    public List<DemandSnapshot>
-    findByReferenceDateAndSector(
-            LocalDate referenceDate,
-            String sector
-    ) {
-
-        return repository
-                .findAllByReferenceDateAndSectorOrderByQualificationDateAsc(
-                        referenceDate,
-                        sector
-                );
-    }
-
-    public boolean exists(
-            LocalDate referenceDate,
-            String externalId
-    ) {
-
-        if (
-                referenceDate == null ||
-                        externalId == null ||
-                        externalId.isBlank()
-        ) {
-            return false;
-        }
-
-        return repository
-                .existsByReferenceDateAndExternalIdIgnoreCase(
-                        referenceDate,
-                        externalId
-                );
-    }
-
-    @Transactional
-    public void deleteByReferenceDate(
-            LocalDate referenceDate
-    ) {
-
-        if (referenceDate == null) {
-            return;
-        }
-
-        repository.deleteAllByReferenceDate(
-                referenceDate
-        );
-    }
-
-    private void copyDemandToSnapshot(
-            Demand demand,
-            DemandSnapshot snapshot,
-            LocalDate referenceDate
-    ) {
-
-        snapshot.setReferenceDate(
-                referenceDate
+        snapshot.setReferenceDateTime(
+                referenceDateTime
         );
 
         snapshot.setExternalId(
@@ -235,6 +77,81 @@ public class DemandSnapshotService {
 
         snapshot.setStatus(
                 demand.getStatus()
+        );
+
+        return repository.save(snapshot);
+    }
+
+    @Transactional
+    public void saveOrUpdateAll(
+            LocalDateTime referenceDateTime,
+            List<Demand> demands
+    ) {
+        for (Demand demand : demands) {
+            saveOrUpdate(
+                    referenceDateTime,
+                    demand
+            );
+        }
+    }
+
+    @Transactional
+    public void replaceSnapshot(
+            LocalDateTime referenceDateTime,
+            List<Demand> demands
+    ) {
+        repository.deleteAllByReferenceDateTime(
+                referenceDateTime
+        );
+
+        saveOrUpdateAll(
+                referenceDateTime,
+                demands
+        );
+    }
+
+    public List<DemandSnapshot> findByReferenceDateTime(
+            LocalDateTime referenceDateTime
+    ) {
+        return repository
+                .findAllByReferenceDateTimeOrderByQualificationDateAsc(
+                        referenceDateTime
+                );
+    }
+
+    public List<DemandSnapshot> findByReferenceDateTimeAndSector(
+            LocalDateTime referenceDateTime,
+            String sector
+    ) {
+        return repository
+                .findAllByReferenceDateTimeAndSectorOrderByQualificationDateAsc(
+                        referenceDateTime,
+                        sector
+                );
+    }
+
+    public List<LocalDateTime> findAvailableDateTimes() {
+        return repository
+                .findDistinctReferenceDateTimes();
+    }
+
+    public boolean exists(
+            LocalDateTime referenceDateTime,
+            String externalId
+    ) {
+        return repository
+                .existsByReferenceDateTimeAndExternalIdIgnoreCase(
+                        referenceDateTime,
+                        externalId
+                );
+    }
+
+    @Transactional
+    public void deleteByReferenceDateTime(
+            LocalDateTime referenceDateTime
+    ) {
+        repository.deleteAllByReferenceDateTime(
+                referenceDateTime
         );
     }
 }

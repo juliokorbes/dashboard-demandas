@@ -27,6 +27,13 @@ public class ImportHistory {
     @Column(nullable = false)
     private int imported;
 
+    /*
+     * O nome "duplicates" é mantido no banco
+     * por compatibilidade com a estrutura existente.
+     *
+     * Na aplicação, esse valor representa
+     * registros atualizados.
+     */
     @Column(name = "duplicates", nullable = false)
     private int updated;
 
@@ -77,7 +84,7 @@ public class ImportHistory {
         return imported;
     }
 
-    public int getupdated() {
+    public int getUpdated() {
         return updated;
     }
 

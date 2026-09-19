@@ -1,5 +1,6 @@
 package br.com.dashboard.demand;
 
+import jakarta.transaction.Transactional;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
@@ -9,6 +10,9 @@ import java.util.Optional;
 
 /**
  * Contém as regras de negócio das demandas.
+ *
+ * A tabela de demandas representa somente
+ * a situação atual da dashboard.
  */
 @Service
 public class DemandService {
@@ -22,7 +26,7 @@ public class DemandService {
     }
 
     /**
-     * Retorna todas as demandas.
+     * Retorna todas as demandas da situação atual.
      */
     public List<Demand> findAll() {
         return demandRepository.findAll();
@@ -76,11 +80,43 @@ public class DemandService {
     }
 
     /**
-     * Calcula quantos dias a demanda está atrasada.
+     * Substitui completamente a situação atual.
      *
-     * Esta regra ainda utiliza vencimento.
-     * Posteriormente a dashboard será adaptada
-     * para utilizar QUALIFICAÇÃO como prioridade.
+     * A lista recebida representa a fotografia
+     * mais recente das filas monitoradas.
+     *
+     * Registros que existiam anteriormente e não
+     * aparecem na nova fotografia deixam de fazer
+     * parte da situação atual.
+     *
+     * Eles NÃO são apagados do histórico de snapshots.
+     */
+    @Transactional
+    public void replaceCurrentSituation(
+            List<Demand> demands
+    ) {
+
+        demandRepository.deleteAll();
+        demandRepository.flush();
+
+        for (Demand demand : demands) {
+
+            /*
+             * Como estamos criando uma nova representação
+             * da situação atual, garantimos que o JPA
+             * trate os objetos como novos registros.
+             */
+            demand.setId(null);
+
+            demandRepository.save(
+                    demand
+            );
+        }
+    }
+
+    /**
+     * Calcula quantos dias a demanda está atrasada
+     * utilizando o vencimento.
      */
     public long calculateDaysOverdue(Long id) {
 
@@ -108,17 +144,15 @@ public class DemandService {
     }
 
     /**
-     * Retorna o total de demandas.
+     * Retorna o total de demandas atuais.
      */
     public long countAll() {
         return demandRepository.count();
     }
 
     /**
-     * Retorna quantas demandas estão atrasadas.
-     *
-     * Esta regra ainda utiliza vencimento e será
-     * atualizada junto com a nova dashboard.
+     * Retorna quantas demandas estão atrasadas
+     * utilizando o vencimento.
      */
     public long countOverdue() {
 
@@ -142,15 +176,23 @@ public class DemandService {
     }
 
     /**
-     * Verifica se o identificador já existe.
+     * Verifica se o identificador existe
+     * na situação atual.
      */
     public boolean existsByExternalId(
             String externalId
     ) {
 
+        if (
+                externalId == null ||
+                        externalId.isBlank()
+        ) {
+            return false;
+        }
+
         return demandRepository
                 .existsByExternalIdIgnoreCase(
-                        externalId
+                        externalId.trim()
                 );
     }
 
@@ -162,8 +204,11 @@ public class DemandService {
     }
 
     /**
-     * Apaga todas as demandas armazenadas.
+     * Apaga todas as demandas da situação atual.
+     *
+     * Não interfere no histórico de snapshots.
      */
+    @Transactional
     public void deleteAll() {
         demandRepository.deleteAll();
     }

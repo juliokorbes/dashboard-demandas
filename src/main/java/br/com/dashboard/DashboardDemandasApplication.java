@@ -10,6 +10,7 @@ import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
 
 /**
  * Inicializa a aplicação e prepara os recursos locais.
@@ -19,6 +20,12 @@ public class DashboardDemandasApplication {
 
 	private static final String DASHBOARD_URL =
 			"http://localhost:8080";
+
+	private static final String APPLICATION_FOLDER =
+			"Dashboard de Prazos e Demandas";
+
+	private static final String LEGACY_APPLICATION_FOLDER =
+			"DashboardDemandas";
 
 	public static void main(String[] args) {
 
@@ -122,10 +129,15 @@ public class DashboardDemandasApplication {
 	}
 
 	/**
-	 * Cria uma pasta gravável para o SQLite.
+	 * Define uma pasta gravável para o banco SQLite.
 	 *
-	 * Exemplo:
-	 * C:/Users/usuario/AppData/Local/DashboardDemandas/data
+	 * No Windows:
+	 *
+	 * C:/Users/usuario/AppData/Local/
+	 * Dashboard de Prazos e Demandas/data/dashboard.db
+	 *
+	 * Também migra automaticamente o banco usado
+	 * pela versão antiga, caso ele ainda exista.
 	 */
 	private static void configureDatabasePath() {
 
@@ -135,6 +147,7 @@ public class DashboardDemandasApplication {
 					System.getenv("LOCALAPPDATA");
 
 			Path applicationDirectory;
+			Path legacyDirectory;
 
 			if (
 					localAppData != null
@@ -144,21 +157,43 @@ public class DashboardDemandasApplication {
 				applicationDirectory =
 						Paths.get(
 								localAppData,
-								"DashboardDemandas",
+								APPLICATION_FOLDER,
+								"data"
+						);
+
+				legacyDirectory =
+						Paths.get(
+								localAppData,
+								LEGACY_APPLICATION_FOLDER,
 								"data"
 						);
 
 			} else {
 
+				String userHome =
+						System.getProperty("user.home");
+
 				applicationDirectory =
 						Paths.get(
-								System.getProperty("user.home"),
-								"DashboardDemandas",
+								userHome,
+								APPLICATION_FOLDER,
+								"data"
+						);
+
+				legacyDirectory =
+						Paths.get(
+								userHome,
+								LEGACY_APPLICATION_FOLDER,
 								"data"
 						);
 			}
 
 			Files.createDirectories(
+					applicationDirectory
+			);
+
+			migrateLegacyDatabase(
+					legacyDirectory,
 					applicationDirectory
 			);
 
@@ -177,6 +212,11 @@ public class DashboardDemandasApplication {
 					normalizedPath
 			);
 
+			System.out.println(
+					"Banco de dados: "
+							+ normalizedPath
+			);
+
 		} catch (IOException exception) {
 
 			throw new IllegalStateException(
@@ -184,5 +224,79 @@ public class DashboardDemandasApplication {
 					exception
 			);
 		}
+	}
+
+	/**
+	 * Preserva dados de versões anteriores.
+	 *
+	 * A migração só acontece quando o banco novo
+	 * ainda não existe.
+	 */
+	private static void migrateLegacyDatabase(
+			Path legacyDirectory,
+			Path newDirectory
+	) throws IOException {
+
+		Path newDatabase =
+				newDirectory.resolve(
+						"dashboard.db"
+				);
+
+		if (Files.exists(newDatabase)) {
+			return;
+		}
+
+		Path legacyDatabase =
+				legacyDirectory.resolve(
+						"dashboard.db"
+				);
+
+		if (!Files.exists(legacyDatabase)) {
+			return;
+		}
+
+		Files.copy(
+				legacyDatabase,
+				newDatabase,
+				StandardCopyOption.REPLACE_EXISTING
+		);
+
+		copyIfExists(
+				legacyDirectory.resolve(
+						"dashboard.db-wal"
+				),
+				newDirectory.resolve(
+						"dashboard.db-wal"
+				)
+		);
+
+		copyIfExists(
+				legacyDirectory.resolve(
+						"dashboard.db-shm"
+				),
+				newDirectory.resolve(
+						"dashboard.db-shm"
+				)
+		);
+
+		System.out.println(
+				"Banco de dados antigo migrado para a nova pasta da aplicação."
+		);
+	}
+
+	private static void copyIfExists(
+			Path source,
+			Path destination
+	) throws IOException {
+
+		if (!Files.exists(source)) {
+			return;
+		}
+
+		Files.copy(
+				source,
+				destination,
+				StandardCopyOption.REPLACE_EXISTING
+		);
 	}
 }

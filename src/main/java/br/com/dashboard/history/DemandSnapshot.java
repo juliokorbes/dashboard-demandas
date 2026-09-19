@@ -7,7 +7,6 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Index;
 import jakarta.persistence.Table;
-import jakarta.persistence.UniqueConstraint;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -15,34 +14,30 @@ import java.time.LocalDateTime;
 @Entity
 @Table(
         name = "demand_snapshots_v2",
-        uniqueConstraints = {
-                @UniqueConstraint(
-                        name = "uk_snapshot_datetime_external_id",
-                        columnNames = {
-                                "reference_datetime",
-                                "external_id"
-                        }
-                )
-        },
         indexes = {
                 @Index(
-                        name = "idx_snapshot_reference_datetime",
+                        name = "ux_snapshot_v2_datetime_external_id",
+                        columnList = "reference_datetime, external_id",
+                        unique = true
+                ),
+                @Index(
+                        name = "idx_snapshot_v2_reference_datetime",
                         columnList = "reference_datetime"
                 ),
                 @Index(
-                        name = "idx_snapshot_external_id",
+                        name = "idx_snapshot_v2_external_id",
                         columnList = "external_id"
                 ),
                 @Index(
-                        name = "idx_snapshot_sector",
+                        name = "idx_snapshot_v2_sector",
                         columnList = "sector"
                 ),
                 @Index(
-                        name = "idx_snapshot_qualification_date",
+                        name = "idx_snapshot_v2_qualification_date",
                         columnList = "qualification_date"
                 ),
                 @Index(
-                        name = "idx_snapshot_status",
+                        name = "idx_snapshot_v2_status",
                         columnList = "status"
                 )
         }

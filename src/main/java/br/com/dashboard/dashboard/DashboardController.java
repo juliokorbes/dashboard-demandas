@@ -13,7 +13,6 @@ import java.util.List;
 public class DashboardController {
 
     private final DashboardService dashboardService;
-
     private final DashboardClearService dashboardClearService;
 
     public DashboardController(
@@ -74,11 +73,36 @@ public class DashboardController {
     }
 
     /**
-     * Limpa as demandas e o histórico de importações.
+     * Limpa somente a situação atual da dashboard
+     * e o histórico técnico de importações.
+     *
+     * As fotografias históricas permanecem salvas.
      */
     @DeleteMapping("/clear")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void clearDashboard() {
-        dashboardClearService.clearAll();
+        dashboardClearService.clearCurrentDashboard();
+    }
+
+    /**
+     * Apaga somente as fotografias históricas.
+     */
+    @DeleteMapping("/clear-history")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void clearHistory() {
+        dashboardClearService.clearHistory();
+    }
+
+    /**
+     * Apaga todos os dados da aplicação:
+     *
+     * - situação atual;
+     * - histórico técnico de importações;
+     * - fotografias históricas.
+     */
+    @DeleteMapping("/clear-everything")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void clearEverything() {
+        dashboardClearService.clearEverything();
     }
 }

@@ -4,6 +4,7 @@
 
 html {
   background: #050f20;
+  color-scheme: dark;
 }
 
 body {
@@ -283,7 +284,7 @@ h2 {
   display: grid;
 
   grid-template-columns:
-    repeat(6, 1fr);
+    repeat(7, minmax(0, 1fr));
 
   gap: 15px;
 
@@ -1071,6 +1072,231 @@ svg * {
   color: white;
 }
 
+
+/* CONTROLES DE DATA/HORA E SELECTS */
+
+select {
+  color-scheme: dark;
+
+  -webkit-appearance: none;
+  appearance: none;
+
+  padding-right: 38px !important;
+
+  background-image:
+          url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Cpath d='M4 6l4 4 4-4' fill='none' stroke='%23dce8f5' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") !important;
+
+  background-repeat: no-repeat !important;
+
+  background-position:
+          right 12px center !important;
+
+  background-size:
+          14px 14px !important;
+}
+
+select:disabled {
+  cursor: not-allowed;
+
+  opacity: 0.55;
+}
+
+.history-view-select {
+  min-height: 44px;
+}
+
+input[type="datetime-local"] {
+  color-scheme: dark;
+}
+
+input[type="datetime-local"]::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+
+  opacity: 0.9;
+
+  filter:
+          invert(1)
+          brightness(1.25);
+}
+
+.datetime-panel {
+  align-items: stretch !important;
+
+  margin-top: 12px;
+
+  gap: 14px;
+}
+
+.datetime-panel-header {
+  display: flex;
+
+  align-items: flex-start;
+
+  justify-content:
+          space-between;
+
+  gap: 16px;
+}
+
+.datetime-label {
+  display: block;
+
+  margin-bottom: 5px;
+
+  color: #dce8f5 !important;
+
+  font-size: 13px !important;
+
+  font-weight: 600;
+}
+
+.datetime-description {
+  display: block;
+
+  color: #8fa6c3;
+
+  font-size: 11px;
+
+  line-height: 1.5;
+}
+
+.datetime-control-row {
+  display: flex;
+
+  align-items: center;
+
+  flex-wrap: wrap;
+
+  gap: 10px;
+}
+
+.datetime-input {
+  width: 250px;
+
+  min-height: 44px;
+
+  padding: 10px 12px;
+
+  border:
+          1px solid
+          rgba(255, 255, 255, 0.12);
+
+  border-radius: 9px;
+
+  outline: none;
+
+  color: #ffffff;
+
+  background: #071b36;
+}
+
+.datetime-input:focus {
+  border-color:
+          rgba(20, 148, 255, 0.7);
+
+  box-shadow:
+          0 0 0 3px
+          rgba(20, 148, 255, 0.08);
+}
+
+.datetime-confirm-button {
+  min-height: 44px;
+
+  padding: 10px 16px;
+
+  border:
+          1px solid
+          rgba(20, 148, 255, 0.28);
+
+  border-radius: 9px;
+
+  color: #ffffff;
+
+  background:
+          rgba(20, 148, 255, 0.14);
+
+  cursor: pointer;
+
+  font-weight: 600;
+
+  transition:
+          background 0.2s ease,
+          border-color 0.2s ease,
+          opacity 0.2s ease;
+}
+
+.datetime-confirm-button:hover:not(:disabled) {
+  border-color:
+          rgba(20, 148, 255, 0.55);
+
+  background:
+          rgba(20, 148, 255, 0.24);
+}
+
+.datetime-confirm-button:disabled {
+  cursor: default;
+
+  opacity: 0.72;
+}
+
+.datetime-confirmed-badge {
+  padding: 5px 9px;
+
+  border:
+          1px solid
+          rgba(67, 216, 160, 0.24);
+
+  border-radius: 999px;
+
+  color: #71e8bd !important;
+
+  background:
+          rgba(67, 216, 160, 0.09);
+
+  font-size: 10px !important;
+
+  font-weight: 700;
+
+  letter-spacing: 0.5px;
+
+  text-transform: uppercase;
+}
+
+.datetime-status {
+  padding: 10px 12px;
+
+  border-radius: 9px;
+
+  font-size: 11px;
+
+  line-height: 1.45;
+}
+
+.datetime-status.success {
+  color: #71e8bd;
+
+  background:
+          rgba(67, 216, 160, 0.08);
+}
+
+.datetime-status.warning {
+  color: #ffd36a;
+
+  background:
+          rgba(255, 201, 92, 0.09);
+}
+
+.datetime-help {
+  display: block;
+
+  color: #8fa6c3;
+
+  font-size: 11px;
+
+  line-height: 1.5;
+}
+
+
 /* RESPONSIVIDADE */
 
 @media (
@@ -1169,6 +1395,21 @@ max-width: 650px
   .mapping-grid {
     grid-template-columns:
       1fr;
+  }
+
+  .datetime-control-row {
+    align-items: stretch;
+
+    flex-direction: column;
+  }
+
+  .datetime-input,
+  .datetime-confirm-button {
+    width: 100%;
+  }
+
+  .datetime-panel-header {
+    flex-direction: column;
   }
 
   /* Evita a borda de foco ao clicar com o mouse */

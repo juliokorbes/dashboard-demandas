@@ -2,6 +2,8 @@ package br.com.dashboard.exportation;
 
 import br.com.dashboard.demand.Demand;
 import br.com.dashboard.demand.DemandService;
+import br.com.dashboard.history.DemandSnapshot;
+import br.com.dashboard.history.DemandSnapshotService;
 import org.apache.poi.ss.usermodel.BorderStyle;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.CellStyle;
@@ -21,6 +23,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.text.Normalizer;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Comparator;
 import java.util.List;
@@ -35,6 +38,9 @@ public class ExcelExportService {
     private static final DateTimeFormatter TITLE_DATE_FORMATTER =
             DateTimeFormatter.ofPattern("dd.MM");
 
+    private static final DateTimeFormatter TITLE_DATE_TIME_FORMATTER =
+            DateTimeFormatter.ofPattern("dd.MM - HH:mm");
+
     private static final String[] HEADERS = {
             "CÓDIGO",
             "SERVIÇO",
@@ -47,62 +53,162 @@ public class ExcelExportService {
     };
 
     private final DemandService demandService;
+    private final DemandSnapshotService demandSnapshotService;
 
-    public ExcelExportService(DemandService demandService) {
-        this.demandService = demandService;
+    public ExcelExportService(
+            DemandService demandService,
+            DemandSnapshotService demandSnapshotService
+    ) {
+        this.demandService =
+                demandService;
+
+        this.demandSnapshotService =
+                demandSnapshotService;
     }
 
+    /**
+     * Mantém compatibilidade com a exportação
+     * da situação atual.
+     */
     public byte[] exportDemands() {
+        return exportDemands(null);
+    }
 
-        List<Demand> demands =
-                demandService.findAll();
+    /**
+     * Exporta a situação atual ou uma fotografia
+     * histórica específica.
+     *
+     * Se referenceDateTime for null:
+     * exporta a situação atual.
+     *
+     * Se referenceDateTime for informado:
+     * exporta exatamente aquela fotografia.
+     */
+    public byte[] exportDemands(
+            LocalDateTime referenceDateTime
+    ) {
 
-        List<Demand> initialDemands =
-                demands.stream()
-                        .filter(this::isInitialConference)
-                        .sorted(qualificationComparator())
+        List<ExportRow> demands;
+
+        LocalDate comparisonDate;
+
+        String title;
+
+        if (referenceDateTime == null) {
+
+            demands =
+                    demandService
+                            .findAll()
+                            .stream()
+                            .map(this::toExportRow)
+                            .toList();
+
+            comparisonDate =
+                    LocalDate.now();
+
+            title =
+                    "Situação em "
+                            + comparisonDate.format(
+                            TITLE_DATE_FORMATTER
+                    );
+
+        } else {
+
+            demands =
+                    demandSnapshotService
+                            .findByReferenceDateTime(
+                                    referenceDateTime
+                            )
+                            .stream()
+                            .map(this::toExportRow)
+                            .toList();
+
+            comparisonDate =
+                    referenceDateTime.toLocalDate();
+
+            title =
+                    "Situação em "
+                            + referenceDateTime.format(
+                            TITLE_DATE_TIME_FORMATTER
+                    );
+        }
+
+        List<ExportRow> initialDemands =
+                demands
+                        .stream()
+                        .filter(
+                                this::isInitialConference
+                        )
+                        .sorted(
+                                qualificationComparator()
+                        )
                         .toList();
 
-        List<Demand> finalDemands =
-                demands.stream()
-                        .filter(this::isFinalConference)
-                        .sorted(qualificationComparator())
+        List<ExportRow> finalDemands =
+                demands
+                        .stream()
+                        .filter(
+                                this::isFinalConference
+                        )
+                        .sorted(
+                                qualificationComparator()
+                        )
                         .toList();
 
         try (
-                Workbook workbook = new XSSFWorkbook();
+                Workbook workbook =
+                        new XSSFWorkbook();
+
                 ByteArrayOutputStream output =
                         new ByteArrayOutputStream()
         ) {
 
             CellStyle titleStyle =
-                    createTitleStyle(workbook);
+                    createTitleStyle(
+                            workbook
+                    );
 
             CellStyle headerStyle =
-                    createHeaderStyle(workbook);
+                    createHeaderStyle(
+                            workbook
+                    );
 
             CellStyle regularStyle =
-                    createRegularStyle(workbook);
+                    createRegularStyle(
+                            workbook
+                    );
 
             CellStyle overdueStyle =
-                    createOverdueStyle(workbook);
+                    createOverdueStyle(
+                            workbook
+                    );
 
             CellStyle todayStyle =
-                    createTodayStyle(workbook);
+                    createTodayStyle(
+                            workbook
+                    );
 
             CellStyle upcomingStyle =
-                    createUpcomingStyle(workbook);
+                    createUpcomingStyle(
+                            workbook
+                    );
 
             CellStyle completedStyle =
-                    createCompletedStyle(workbook);
+                    createCompletedStyle(
+                            workbook
+                    );
 
             CellStyle totalStyle =
-                    createTotalStyle(workbook);
+                    createTotalStyle(
+                            workbook
+                    );
 
             createSheet(
                     workbook,
                     "Conferência Inicial",
                     initialDemands,
+                    title,
+                    comparisonDate,
                     titleStyle,
                     headerStyle,
                     regularStyle,
@@ -117,6 +223,8 @@ public class ExcelExportService {
                     workbook,
                     "Conferência Final",
                     finalDemands,
+                    title,
+                    comparisonDate,
                     titleStyle,
                     headerStyle,
                     regularStyle,
@@ -127,9 +235,12 @@ public class ExcelExportService {
                     totalStyle
             );
 
-            workbook.write(output);
+            workbook.write(
+                    output
+            );
 
-            return output.toByteArray();
+            return output
+                    .toByteArray();
 
         } catch (IOException exception) {
 
@@ -140,10 +251,56 @@ public class ExcelExportService {
         }
     }
 
+    /**
+     * Converte uma demanda atual para o formato
+     * interno utilizado pela exportação.
+     */
+    private ExportRow toExportRow(
+            Demand demand
+    ) {
+
+        return new ExportRow(
+                demand.getExternalId(),
+                demand.getType(),
+                demand.getStage(),
+                demand.getSector(),
+                demand.getResponsible(),
+                demand.getEntryDate(),
+                demand.getQualificationDate(),
+                demand.getDeadline(),
+                demand.getReentryDate(),
+                demand.getStatus()
+        );
+    }
+
+    /**
+     * Converte uma fotografia histórica para
+     * o mesmo formato utilizado na exportação.
+     */
+    private ExportRow toExportRow(
+            DemandSnapshot snapshot
+    ) {
+
+        return new ExportRow(
+                snapshot.getExternalId(),
+                snapshot.getType(),
+                snapshot.getStage(),
+                snapshot.getSector(),
+                snapshot.getResponsible(),
+                snapshot.getEntryDate(),
+                snapshot.getQualificationDate(),
+                snapshot.getDeadline(),
+                snapshot.getReentryDate(),
+                snapshot.getStatus()
+        );
+    }
+
     private void createSheet(
             Workbook workbook,
             String sheetName,
-            List<Demand> demands,
+            List<ExportRow> demands,
+            String title,
+            LocalDate comparisonDate,
             CellStyle titleStyle,
             CellStyle headerStyle,
             CellStyle regularStyle,
@@ -155,10 +312,13 @@ public class ExcelExportService {
     ) {
 
         Sheet sheet =
-                workbook.createSheet(sheetName);
+                workbook.createSheet(
+                        sheetName
+                );
 
         createTitle(
                 sheet,
+                title,
                 titleStyle
         );
 
@@ -169,16 +329,21 @@ public class ExcelExportService {
 
         int rowIndex = 2;
 
-        for (Demand demand : demands) {
+        for (ExportRow demand : demands) {
 
             Row row =
-                    sheet.createRow(rowIndex++);
+                    sheet.createRow(
+                            rowIndex++
+                    );
 
-            row.setHeightInPoints(22);
+            row.setHeightInPoints(
+                    22
+            );
 
             CellStyle rowStyle =
                     resolveRowStyle(
                             demand,
+                            comparisonDate,
                             regularStyle,
                             overdueStyle,
                             todayStyle,
@@ -189,28 +354,28 @@ public class ExcelExportService {
             createCell(
                     row,
                     0,
-                    demand.getExternalId(),
+                    demand.externalId(),
                     rowStyle
             );
 
             createCell(
                     row,
                     1,
-                    demand.getType(),
+                    demand.type(),
                     rowStyle
             );
 
             createCell(
                     row,
                     2,
-                    demand.getStage(),
+                    demand.stage(),
                     rowStyle
             );
 
             createCell(
                     row,
                     3,
-                    demand.getResponsible(),
+                    demand.responsible(),
                     rowStyle
             );
 
@@ -218,7 +383,7 @@ public class ExcelExportService {
                     row,
                     4,
                     formatDate(
-                            demand.getEntryDate()
+                            demand.entryDate()
                     ),
                     rowStyle
             );
@@ -227,7 +392,7 @@ public class ExcelExportService {
                     row,
                     5,
                     formatDate(
-                            demand.getQualificationDate()
+                            demand.qualificationDate()
                     ),
                     rowStyle
             );
@@ -236,7 +401,7 @@ public class ExcelExportService {
                     row,
                     6,
                     formatDate(
-                            demand.getDeadline()
+                            demand.deadline()
                     ),
                     rowStyle
             );
@@ -245,7 +410,7 @@ public class ExcelExportService {
                     row,
                     7,
                     formatDate(
-                            demand.getReentryDate()
+                            demand.reentryDate()
                     ),
                     rowStyle
             );
@@ -266,13 +431,16 @@ public class ExcelExportService {
 
     private void createTitle(
             Sheet sheet,
+            String title,
             CellStyle titleStyle
     ) {
 
         Row titleRow =
                 sheet.createRow(0);
 
-        titleRow.setHeightInPoints(24);
+        titleRow.setHeightInPoints(
+                24
+        );
 
         sheet.addMergedRegion(
                 new CellRangeAddress(
@@ -286,14 +454,13 @@ public class ExcelExportService {
         Cell cell =
                 titleRow.createCell(0);
 
-        String title =
-                "Situação em " +
-                        LocalDate.now().format(
-                                TITLE_DATE_FORMATTER
-                        );
+        cell.setCellValue(
+                title
+        );
 
-        cell.setCellValue(title);
-        cell.setCellStyle(titleStyle);
+        cell.setCellStyle(
+                titleStyle
+        );
 
         for (
                 int column = 1;
@@ -302,7 +469,9 @@ public class ExcelExportService {
         ) {
 
             Cell mergedCell =
-                    titleRow.createCell(column);
+                    titleRow.createCell(
+                            column
+                    );
 
             mergedCell.setCellStyle(
                     titleStyle
@@ -318,7 +487,9 @@ public class ExcelExportService {
         Row headerRow =
                 sheet.createRow(1);
 
-        headerRow.setHeightInPoints(24);
+        headerRow.setHeightInPoints(
+                24
+        );
 
         for (
                 int column = 0;
@@ -327,7 +498,9 @@ public class ExcelExportService {
         ) {
 
             Cell cell =
-                    headerRow.createCell(column);
+                    headerRow.createCell(
+                            column
+                    );
 
             cell.setCellValue(
                     HEADERS[column]
@@ -347,7 +520,9 @@ public class ExcelExportService {
     ) {
 
         Row totalRow =
-                sheet.createRow(rowIndex);
+                sheet.createRow(
+                        rowIndex
+                );
 
         sheet.addMergedRegion(
                 new CellRangeAddress(
@@ -441,26 +616,28 @@ public class ExcelExportService {
     }
 
     private boolean isInitialConference(
-            Demand demand
+            ExportRow demand
     ) {
 
         String sector =
                 normalizeText(
-                        demand.getSector()
+                        demand.sector()
                 );
 
         String stage =
                 normalizeText(
-                        demand.getStage()
+                        demand.stage()
                 );
 
         return (
                 sector.contains(
                         "conferencia inicial"
-                ) ||
+                )
+                        ||
                         sector.contains(
                                 "conferencia_inicial"
-                        ) ||
+                        )
+                        ||
                         stage.contains(
                                 "conferencia inicial"
                         )
@@ -468,26 +645,28 @@ public class ExcelExportService {
     }
 
     private boolean isFinalConference(
-            Demand demand
+            ExportRow demand
     ) {
 
         String sector =
                 normalizeText(
-                        demand.getSector()
+                        demand.sector()
                 );
 
         String stage =
                 normalizeText(
-                        demand.getStage()
+                        demand.stage()
                 );
 
         return (
                 sector.contains(
                         "conferencia final"
-                ) ||
+                )
+                        ||
                         sector.contains(
                                 "conferencia_final"
-                        ) ||
+                        )
+                        ||
                         stage.contains(
                                 "conferencia final"
                         )
@@ -519,11 +698,11 @@ public class ExcelExportService {
                 );
     }
 
-    private Comparator<Demand>
+    private Comparator<ExportRow>
     qualificationComparator() {
 
         return Comparator.comparing(
-                Demand::getQualificationDate,
+                ExportRow::qualificationDate,
                 Comparator.nullsLast(
                         Comparator.naturalOrder()
                 )
@@ -531,7 +710,8 @@ public class ExcelExportService {
     }
 
     private CellStyle resolveRowStyle(
-            Demand demand,
+            ExportRow demand,
+            LocalDate comparisonDate,
             CellStyle regularStyle,
             CellStyle overdueStyle,
             CellStyle todayStyle,
@@ -539,35 +719,44 @@ public class ExcelExportService {
             CellStyle completedStyle
     ) {
 
+        /*
+         * Só utiliza o verde se o próprio
+         * relatório trouxer explicitamente
+         * status de conclusão.
+         *
+         * Desaparecer da fotografia seguinte
+         * NÃO significa conclusão.
+         */
         if (isCompleted(demand)) {
             return completedStyle;
         }
 
         LocalDate qualificationDate =
-                demand.getQualificationDate();
+                demand.qualificationDate();
 
         if (qualificationDate == null) {
             return regularStyle;
         }
 
-        LocalDate today =
-                LocalDate.now();
-
         if (
-                qualificationDate.isBefore(today)
+                qualificationDate.isBefore(
+                        comparisonDate
+                )
         ) {
             return overdueStyle;
         }
 
         if (
-                qualificationDate.isEqual(today)
+                qualificationDate.isEqual(
+                        comparisonDate
+                )
         ) {
             return todayStyle;
         }
 
         if (
                 !qualificationDate.isAfter(
-                        today.plusDays(5)
+                        comparisonDate.plusDays(5)
                 )
         ) {
             return upcomingStyle;
@@ -577,12 +766,12 @@ public class ExcelExportService {
     }
 
     private boolean isCompleted(
-            Demand demand
+            ExportRow demand
     ) {
 
         String status =
                 normalizeText(
-                        demand.getStatus()
+                        demand.status()
                 );
 
         return status.equals(
@@ -601,11 +790,14 @@ public class ExcelExportService {
                 workbook.createFont();
 
         font.setBold(true);
+
         font.setFontHeightInPoints(
                 (short) 12
         );
 
-        style.setFont(font);
+        style.setFont(
+                font
+        );
 
         style.setAlignment(
                 HorizontalAlignment.CENTER
@@ -616,14 +808,17 @@ public class ExcelExportService {
         );
 
         style.setFillForegroundColor(
-                IndexedColors.LIGHT_TURQUOISE.getIndex()
+                IndexedColors.LIGHT_TURQUOISE
+                        .getIndex()
         );
 
         style.setFillPattern(
                 FillPatternType.SOLID_FOREGROUND
         );
 
-        applyBorders(style);
+        applyBorders(
+                style
+        );
 
         return style;
     }
@@ -644,10 +839,13 @@ public class ExcelExportService {
                 IndexedColors.WHITE.getIndex()
         );
 
-        style.setFont(font);
+        style.setFont(
+                font
+        );
 
         style.setFillForegroundColor(
-                IndexedColors.DARK_BLUE.getIndex()
+                IndexedColors.DARK_BLUE
+                        .getIndex()
         );
 
         style.setFillPattern(
@@ -662,9 +860,13 @@ public class ExcelExportService {
                 VerticalAlignment.CENTER
         );
 
-        style.setWrapText(true);
+        style.setWrapText(
+                true
+        );
 
-        applyBorders(style);
+        applyBorders(
+                style
+        );
 
         return style;
     }
@@ -676,7 +878,9 @@ public class ExcelExportService {
         CellStyle style =
                 workbook.createCellStyle();
 
-        configureDataStyle(style);
+        configureDataStyle(
+                style
+        );
 
         return style;
     }
@@ -689,14 +893,17 @@ public class ExcelExportService {
                 workbook.createCellStyle();
 
         style.setFillForegroundColor(
-                IndexedColors.ROSE.getIndex()
+                IndexedColors.ROSE
+                        .getIndex()
         );
 
         style.setFillPattern(
                 FillPatternType.SOLID_FOREGROUND
         );
 
-        configureDataStyle(style);
+        configureDataStyle(
+                style
+        );
 
         return style;
     }
@@ -709,14 +916,17 @@ public class ExcelExportService {
                 workbook.createCellStyle();
 
         style.setFillForegroundColor(
-                IndexedColors.LIGHT_ORANGE.getIndex()
+                IndexedColors.LIGHT_ORANGE
+                        .getIndex()
         );
 
         style.setFillPattern(
                 FillPatternType.SOLID_FOREGROUND
         );
 
-        configureDataStyle(style);
+        configureDataStyle(
+                style
+        );
 
         return style;
     }
@@ -729,14 +939,17 @@ public class ExcelExportService {
                 workbook.createCellStyle();
 
         style.setFillForegroundColor(
-                IndexedColors.LIGHT_YELLOW.getIndex()
+                IndexedColors.LIGHT_YELLOW
+                        .getIndex()
         );
 
         style.setFillPattern(
                 FillPatternType.SOLID_FOREGROUND
         );
 
-        configureDataStyle(style);
+        configureDataStyle(
+                style
+        );
 
         return style;
     }
@@ -749,14 +962,17 @@ public class ExcelExportService {
                 workbook.createCellStyle();
 
         style.setFillForegroundColor(
-                IndexedColors.LIGHT_GREEN.getIndex()
+                IndexedColors.LIGHT_GREEN
+                        .getIndex()
         );
 
         style.setFillPattern(
                 FillPatternType.SOLID_FOREGROUND
         );
 
-        configureDataStyle(style);
+        configureDataStyle(
+                style
+        );
 
         return style;
     }
@@ -773,10 +989,13 @@ public class ExcelExportService {
 
         font.setBold(true);
 
-        style.setFont(font);
+        style.setFont(
+                font
+        );
 
         style.setFillForegroundColor(
-                IndexedColors.YELLOW.getIndex()
+                IndexedColors.YELLOW
+                        .getIndex()
         );
 
         style.setFillPattern(
@@ -791,7 +1010,9 @@ public class ExcelExportService {
                 VerticalAlignment.CENTER
         );
 
-        applyBorders(style);
+        applyBorders(
+                style
+        );
 
         return style;
     }
@@ -804,9 +1025,13 @@ public class ExcelExportService {
                 VerticalAlignment.CENTER
         );
 
-        style.setWrapText(true);
+        style.setWrapText(
+                true
+        );
 
-        applyBorders(style);
+        applyBorders(
+                style
+        );
     }
 
     private void applyBorders(
@@ -838,7 +1063,9 @@ public class ExcelExportService {
     ) {
 
         Cell cell =
-                row.createCell(column);
+                row.createCell(
+                        column
+                );
 
         cell.setCellValue(
                 value == null
@@ -846,7 +1073,9 @@ public class ExcelExportService {
                         : value
         );
 
-        cell.setCellStyle(style);
+        cell.setCellStyle(
+                style
+        );
     }
 
     private String formatDate(
@@ -860,5 +1089,23 @@ public class ExcelExportService {
         return date.format(
                 DATE_FORMATTER
         );
+    }
+
+    /**
+     * Estrutura comum usada tanto para a
+     * situação atual quanto para snapshots.
+     */
+    private record ExportRow(
+            String externalId,
+            String type,
+            String stage,
+            String sector,
+            String responsible,
+            LocalDate entryDate,
+            LocalDate qualificationDate,
+            LocalDate deadline,
+            LocalDate reentryDate,
+            String status
+    ) {
     }
 }

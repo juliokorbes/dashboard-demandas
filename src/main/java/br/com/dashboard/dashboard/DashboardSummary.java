@@ -9,7 +9,7 @@ public record DashboardSummary(
         long today,
         long dueSoon,
         long onTime,
-        long completed,
+        long exitedQueue,
         long noDeadline
 ) {
 }

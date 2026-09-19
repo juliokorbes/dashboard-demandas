@@ -8,6 +8,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -36,30 +37,39 @@ public class ImportController {
     }
 
     /**
-     * Retorna somente os cabeçalhos encontrados no Excel.
+     * Retorna somente os cabeçalhos encontrados
+     * no primeiro arquivo selecionado.
+     *
+     * O mapeamento é utilizado para todos os arquivos
+     * do mesmo lote.
      */
     @PostMapping("/headers")
     public List<String> headers(
             @RequestParam MultipartFile file
     ) throws IOException {
 
-        return excelFileReader.readHeaders(file);
+        return excelFileReader.readHeaders(
+                file
+        );
     }
 
     /**
      * Retorna os cabeçalhos e algumas linhas
-     * para pré-visualização.
+     * para pré-visualização do primeiro arquivo.
      */
     @PostMapping("/preview")
     public ExcelPreview preview(
             @RequestParam MultipartFile file
     ) throws IOException {
 
-        return excelFileReader.readPreview(file);
+        return excelFileReader.readPreview(
+                file
+        );
     }
 
     /**
-     * Mostra uma prévia das linhas após o mapeamento.
+     * Mostra uma prévia das linhas
+     * após o mapeamento.
      */
     @PostMapping("/map-preview")
     public List<NormalizedDemandRow> mapPreview(
@@ -99,7 +109,9 @@ public class ImportController {
     ) throws IOException {
 
         ExcelPreview preview =
-                excelFileReader.readPreview(file);
+                excelFileReader.readPreview(
+                        file
+                );
 
         ColumnMapping mapping =
                 createMapping(
@@ -122,21 +134,33 @@ public class ImportController {
     }
 
     /**
-     * Importa todas as linhas válidas do Excel.
+     * Importa um ou vários arquivos
+     * como uma única fotografia.
      *
-     * referenceDateTime representa a data e hora
-     * da situação do relatório.
+     * Compatibilidade:
      *
-     * Exemplo:
-     * 2026-09-16T14:00
+     * - "file" aceita o frontend antigo
+     *   com apenas um arquivo.
      *
-     * Se nenhuma data e hora forem enviadas,
-     * utiliza automaticamente o momento atual.
+     * - "files" aceita vários arquivos
+     *   no mesmo lote.
+     *
+     * Todos representam a mesma data e hora.
      */
     @PostMapping("/demands")
     public ImportResult importDemands(
 
-            @RequestParam MultipartFile file,
+            @RequestParam(
+                    name = "file",
+                    required = false
+            )
+            MultipartFile file,
+
+            @RequestParam(
+                    name = "files",
+                    required = false
+            )
+            List<MultipartFile> files,
 
             @RequestParam(defaultValue = "")
             String externalId,
@@ -195,8 +219,20 @@ public class ImportController {
                         ? referenceDateTime
                         : LocalDateTime.now();
 
+        List<MultipartFile> resolvedFiles =
+                resolveFiles(
+                        file,
+                        files
+                );
+
+        if (resolvedFiles.isEmpty()) {
+            throw new IllegalArgumentException(
+                    "Selecione pelo menos um arquivo."
+            );
+        }
+
         return importService.importDemands(
-                file,
+                resolvedFiles,
                 mapping,
                 resolvedReferenceDateTime
         );
@@ -210,7 +246,9 @@ public class ImportController {
 
         return importHistoryService
                 .findLatest()
-                .map(ResponseEntity::ok)
+                .map(
+                        ResponseEntity::ok
+                )
                 .orElseGet(
                         () ->
                                 ResponseEntity
@@ -229,7 +267,8 @@ public class ImportController {
     }
 
     /**
-     * Apaga o histórico geral de importações.
+     * Apaga o histórico técnico
+     * de importações.
      */
     @DeleteMapping("/history")
     @ResponseStatus(HttpStatus.NO_CONTENT)
@@ -239,8 +278,53 @@ public class ImportController {
     }
 
     /**
-     * Cria o mapeamento entre as colunas do Excel
-     * e os campos do sistema.
+     * Aceita tanto o formato antigo:
+     *
+     * file = arquivo único
+     *
+     * quanto o novo:
+     *
+     * files = vários arquivos.
+     */
+    private List<MultipartFile> resolveFiles(
+            MultipartFile file,
+            List<MultipartFile> files
+    ) {
+
+        List<MultipartFile> resolved =
+                new ArrayList<>();
+
+        if (files != null) {
+
+            for (MultipartFile item : files) {
+
+                if (
+                        item != null &&
+                                !item.isEmpty()
+                ) {
+                    resolved.add(
+                            item
+                    );
+                }
+            }
+        }
+
+        if (
+                file != null &&
+                        !file.isEmpty()
+        ) {
+
+            resolved.add(
+                    file
+            );
+        }
+
+        return resolved;
+    }
+
+    /**
+     * Cria o mapeamento entre as colunas
+     * do Excel e os campos do sistema.
      */
     private ColumnMapping createMapping(
 
